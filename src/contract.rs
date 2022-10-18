@@ -10,7 +10,7 @@ use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
-use crate::withdraw::execute_withdraw;
+use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -71,7 +71,15 @@ pub fn execute(
             lockup_id,
             recipient,
             withdraw_assets,
-        } => todo!(),
+        } => execute_withdraw_unlocked(
+            deps,
+            env,
+            info,
+            api.addr_validate(&vault_address)?,
+            lockup_id,
+            recipient,
+            withdraw_assets,
+        ),
         ExecuteMsg::Callback(msg) => match msg {
             CallbackMsg::ProvideLiquidity {
                 vault_address,

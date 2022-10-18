@@ -1,13 +1,24 @@
-use cosmos_vault_standard::msg::{
-    AssetsResponse, ExecuteMsg as VaultExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
-    QueryMsg as VaultQueryMsg, VaultInfo,
+use cosmos_vault_standard::{
+    extensions::lockup::LockupExecuteMsg,
+    msg::{
+        AssetsResponse, ExecuteMsg as VaultExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
+        QueryMsg as VaultQueryMsg, VaultInfo,
+    },
 };
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, DepsMut, Env, MessageInfo, Response, WasmMsg};
+use cosmwasm_std::{
+    to_binary, Addr, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
+    WasmMsg,
+};
 use cw_asset::{Asset, AssetInfo};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
-use crate::{helpers::merge_responses, msg::WithdrawAssets, state::ROUTER, ContractError};
+use crate::{
+    helpers::merge_responses,
+    msg::WithdrawAssets,
+    state::{LOCKUP_IDS, ROUTER},
+    ContractError,
+};
 
 pub fn execute_withdraw(
     deps: DepsMut,
@@ -17,6 +28,87 @@ pub fn execute_withdraw(
     recipient: Option<String>,
     withdraw_assets: WithdrawAssets,
 ) -> Result<Response, ContractError> {
+    let get_withdraw_msg = |vault_address: String, funds: Vec<Coin>, recipient: Option<String>| {
+        Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: vault_address,
+            funds,
+            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Withdraw {
+                receiver: recipient,
+            })?,
+        }))
+    };
+
+    withdraw(
+        deps,
+        env,
+        info,
+        vault_address,
+        recipient,
+        withdraw_assets,
+        get_withdraw_msg,
+    )
+}
+
+pub fn execute_withdraw_unlocked(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    vault_address: Addr,
+    lockup_id: u64,
+    recipient: Option<String>,
+    withdraw_assets: WithdrawAssets,
+) -> Result<Response, ContractError> {
+    // Load users lockup IDs.
+    let mut lock_ids = LOCKUP_IDS.load(deps.storage, info.sender.clone())?;
+
+    // Check if lockup ID is valid.
+    if !lock_ids.contains(&lockup_id) {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    // Remove lockup ID from users lockup IDs.
+    lock_ids.retain(|x| *x != lockup_id);
+    LOCKUP_IDS.save(deps.storage, info.sender.clone(), &lock_ids)?;
+
+    // Proceed with normal withdraw
+
+    let get_withdraw_msg = |vault_address: String, funds: Vec<Coin>, recipient: Option<String>| {
+        Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: vault_address,
+            funds,
+            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
+                ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
+                    receiver: recipient,
+                    lockup_id: Some(lockup_id),
+                }),
+            ))?,
+        }))
+    };
+
+    withdraw(
+        deps,
+        env,
+        info,
+        vault_address,
+        recipient,
+        withdraw_assets,
+        get_withdraw_msg,
+    )
+}
+
+// Called by execute_withdraw and execute_withdraw_unlocked to withdraw assets from the vault.
+pub fn withdraw<F>(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    vault_address: Addr,
+    recipient: Option<String>,
+    withdraw_assets: WithdrawAssets,
+    get_withdraw_msg: F,
+) -> Result<Response, ContractError>
+where
+    F: Fn(String, Vec<Coin>, Option<String>) -> StdResult<CosmosMsg>,
+{
     let router = ROUTER.load(deps.storage)?;
 
     // Unwrap recipient or use sender
@@ -67,23 +159,19 @@ pub fn execute_withdraw(
             // If the requested denom is the same as the vaults withdrawal asset
             // just withdraw directly to the recipient.
             if requested_denom == vault_asset.to_string() {
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: vault_address.to_string(),
-                    funds: info.funds,
-                    msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Withdraw {
-                        receiver: Some(recipient.to_string()),
-                    })?,
-                }));
+                msgs.push(get_withdraw_msg(
+                    vault_address.to_string(),
+                    info.funds,
+                    Some(recipient.to_string()),
+                )?);
                 return Ok(Response::new().add_messages(msgs));
             } else {
                 // Add message to withdraw from vault, but return assets to this contract.
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: vault_address.to_string(),
-                    funds: info.funds,
-                    msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Withdraw {
-                        receiver: None,
-                    })?,
-                }));
+                msgs.push(get_withdraw_msg(
+                    vault_address.to_string(),
+                    info.funds,
+                    None,
+                )?);
             }
 
             let mut response = Response::new().add_messages(msgs);
@@ -145,13 +233,11 @@ pub fn execute_withdraw(
 
                 // Add message to withdraw asset from vault, withdraw liquidity,
                 // and return withdrawn assets to recipient.
-                msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: vault_address.to_string(),
-                    funds: info.funds,
-                    msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Withdraw {
-                        receiver: None,
-                    })?,
-                }));
+                msgs.push(get_withdraw_msg(
+                    vault_address.to_string(),
+                    info.funds,
+                    None,
+                )?);
                 let res =
                     pool.withdraw_liquidity(deps.as_ref(), asset_withdrawn_from_vault, recipient)?;
                 return Ok(merge_responses(vec![
