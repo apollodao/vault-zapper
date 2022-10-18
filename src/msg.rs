@@ -1,6 +1,6 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
-use cw_asset::{Asset, AssetInfo};
+use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
+use cw_asset::Asset;
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 
@@ -91,7 +91,7 @@ pub enum WithdrawAssets {
 #[test]
 pub fn test_withdrawable_asset() {
     //Example response for ATOM-OSMO pool
-    let example_response: Vec<WithdrawAssets> = vec![
+    let _example_response: Vec<WithdrawAssets> = vec![
         WithdrawAssets::Single("osmo".to_string()),
         WithdrawAssets::Single("usdc".to_string()),
         WithdrawAssets::Single("atom".to_string()),
