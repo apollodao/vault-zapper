@@ -23,7 +23,6 @@ pub enum ExecuteMsg {
     },
     Unlock {
         vault_address: String,
-        recipient: Option<String>,
     },
     WithdrawUnlocked {
         vault_address: String,
