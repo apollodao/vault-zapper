@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, StdResult, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Response, StdResult, WasmMsg};
 
 use crate::msg::ExecuteMsg;
 
@@ -24,4 +24,22 @@ impl CwTemplateContract {
         }
         .into())
     }
+}
+
+/// Merge several Response objects into one. Currently ignores the data fields.
+pub(crate) fn merge_responses(responses: Vec<Response>) -> Response {
+    let mut merged = Response::default();
+    for response in responses {
+        merged = merged
+            .add_attributes(response.attributes)
+            .add_events(response.events)
+            .add_messages(
+                response
+                    .messages
+                    .iter()
+                    .map(|m| m.msg.clone())
+                    .collect::<Vec<_>>(),
+            );
+    }
+    merged
 }

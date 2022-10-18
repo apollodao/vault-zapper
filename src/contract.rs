@@ -7,6 +7,7 @@ use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_depos
 use crate::error::ContractError;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::ROUTER;
+use crate::withdraw::execute_withdraw;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -51,7 +52,14 @@ pub fn execute(
             vault_address,
             recipient,
             withdraw_assets,
-        } => todo!(),
+        } => execute_withdraw(
+            deps,
+            env,
+            info,
+            api.addr_validate(&vault_address)?,
+            recipient,
+            withdraw_assets,
+        ),
         ExecuteMsg::Unlock {
             vault_address,
             recipient,

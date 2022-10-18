@@ -8,6 +8,9 @@ pub enum ContractError {
     Std(#[from] StdError),
 
     #[error("{0}")]
+    Generic(String),
+
+    #[error("{0}")]
     OverflowError(#[from] OverflowError),
 
     #[error("{0}")]
@@ -18,4 +21,10 @@ pub enum ContractError {
 
     #[error("Vault must have exactly one deposit coin")]
     UnsupportedVault {},
+
+    #[error("Can only withdraw multiple assets if the vault returns an LP token")]
+    UnsupportedWithdrawal {},
+
+    #[error("Invalid vault token sent")]
+    InvalidVaultToken {},
 }
