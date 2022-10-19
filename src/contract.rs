@@ -9,7 +9,7 @@ use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_depos
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::query::query_depositable_assets;
+use crate::query::{query_depositable_assets, query_withdrawable_assets};
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
@@ -127,7 +127,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::WithdrawableAssets { vault_address: _ } => todo!(),
+        QueryMsg::WithdrawableAssets { vault_address } => to_binary(&query_withdrawable_assets(
+            deps,
+            deps.api.addr_validate(&vault_address)?,
+        )?),
     }
 }
 
