@@ -67,7 +67,6 @@ pub fn execute_deposit(
         Some(x) => {
             // Get the assets in the pool
             let pool_tokens: Vec<AssetInfo> = x
-                .as_trait()
                 .get_pool_liquidity(deps.as_ref())?
                 .into_iter()
                 .map(|x| x.info.clone())

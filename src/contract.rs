@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
 };
 use cw2::set_contract_version;
 
@@ -9,6 +9,7 @@ use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_depos
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::query::query_depositable_assets;
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
@@ -120,8 +121,14 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-    unimplemented!()
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::DepositableAssets { vault_address } => to_binary(&query_depositable_assets(
+            deps,
+            deps.api.addr_validate(&vault_address)?,
+        )?),
+        QueryMsg::WithdrawableAssets { vault_address: _ } => todo!(),
+    }
 }
 
 pub const UNLOCK_REPLY_ID: u64 = 0u64;

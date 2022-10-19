@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, Coin, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
 use cw_asset::AssetInfo;
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
@@ -75,15 +75,13 @@ impl CallbackMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns Vec<Coin>. The user may deposit any amount of several of these.
-    /// The zapper will call BasketLiquidate on all those tokens that are not
-    /// in the pool. It will then call ProvideLiquidity.
-    #[returns(Vec<Coin>)]
-    DepositableAssets { vault: String },
+    #[returns(Vec<String>)]
+    DepositableAssets { vault_address: String },
 
-    /// Returns Vec<WithdrawableAsset>. The user may withdraw only one of these.
-    /// TODO: How to handle the case where the user wants to withdraw the assets in the pool?
+    /// Returns Vec<WithdrawableAsset>. The user may chose one of the options in
+    /// this vec when calling Withdraw or WithdrawUnlocked.
     #[returns(Vec<WithdrawAssets>)]
-    WithdrawableAssets { vault: String },
+    WithdrawableAssets { vault_address: String },
 }
 
 #[cw_serde]
