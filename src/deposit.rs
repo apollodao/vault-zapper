@@ -6,10 +6,11 @@ use cosmos_vault_standard::msg::{
 use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, WasmMsg,
 };
-use cw_asset::{Asset, AssetInfo};
+use cw_asset::{Asset, AssetInfo, AssetList};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
+use crate::helpers::CoinBalances;
 use crate::{msg::CallbackMsg, state::ROUTER, ContractError};
 
 pub fn execute_deposit(
@@ -43,11 +44,11 @@ pub fn execute_deposit(
     if depositable_assets.len() != 1 {
         return Err(ContractError::UnsupportedVault {});
     }
-    let depositable_asset = AssetInfo::Native(depositable_assets[0].clone());
+    let deposit_asset_info = AssetInfo::Native(depositable_assets[0].clone());
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if info.funds.len() == 1 && info.funds[0].denom == depositable_asset.to_string() {
+    if info.funds.len() == 1 && info.funds[0].denom == deposit_asset_info.to_string() {
         let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
             funds: info.funds,
@@ -59,7 +60,7 @@ pub fn execute_deposit(
     }
 
     //Check if the depositable asset is an LP token
-    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &depositable_asset).ok();
+    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
 
     //Set the target of the basket liquidation, depending on if depositable asset is an LP token or not
     let receive_asset_info = match pool {
@@ -81,43 +82,12 @@ pub fn execute_deposit(
         }
         None => {
             //Not an LP token. Use the depositable_asset as the target for the basket liquidation
-            depositable_asset.clone()
+            deposit_asset_info.clone()
         }
     };
 
-    // Query the receive asset balance of this contract to pass into the callback.
-    // We do this so that we only provide liquidity or deposit the users sent assets,
-    // and not any assets that were already in the contract.
-    let mut receive_asset_balance =
-        receive_asset_info.query_balance(&deps.querier, env.contract.address.to_string())?;
-
-    // If the receive_asset was also sent by the user, we must deduct this since
-    // we want the contract balance prior to the users deposit.
-    let receive_assets_sent_by_caller = info
-        .funds
-        .iter()
-        .find(|x| x.denom == receive_asset_info.to_string());
-    if let Some(x) = receive_assets_sent_by_caller {
-        receive_asset_balance = receive_asset_balance.checked_sub(x.amount)?;
-    }
-    let receive_asset_before = Asset::new(receive_asset_info.clone(), receive_asset_balance);
-
-    // In the case that the depositable asset is an LP token, we must also do the above for the depositable asset,
-    // since in this case depositable_asset != receive_asset.
-    let deposit_asset_before = if depositable_asset == receive_asset_info {
-        receive_asset_before.clone()
-    } else {
-        let mut deposit_asset_balance =
-            depositable_asset.query_balance(&deps.querier, env.contract.address.to_string())?;
-        let deposit_assets_sent_by_caller = info
-            .funds
-            .iter()
-            .find(|x| x.denom == depositable_asset.to_string());
-        if let Some(x) = deposit_assets_sent_by_caller {
-            deposit_asset_balance = deposit_asset_balance.checked_sub(x.amount)?;
-        }
-        Asset::new(depositable_asset.clone(), deposit_asset_balance)
-    };
+    // Get the amount of coins sent by the caller and how much was already in the contract.
+    let coin_balances = CoinBalances::new(&deps.querier, &env, &info.funds)?;
 
     // Basket Liquidate deposited coins
     // We only liquidate the coins that are not already the target asset
@@ -136,8 +106,9 @@ pub fn execute_deposit(
                 vault_address,
                 recipient,
                 pool,
-                deposit_asset_before,
-                receive_asset_before,
+                coin_balances,
+                deposit_asset_info,
+                receive_asset_info,
                 slippage_tolerance,
             }
             .into_cosmos_msg(&env)?,
@@ -148,7 +119,8 @@ pub fn execute_deposit(
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
-                deposit_asset_before: receive_asset_before,
+                coin_balances,
+                deposit_asset_info,
             }
             .into_cosmos_msg(&env)?,
         );
@@ -164,8 +136,9 @@ pub fn callback_provide_liquidity(
     vault_address: Addr,
     recipient: Addr,
     pool: Pool,
-    deposit_asset_before: Asset,
-    receive_asset_before: Asset,
+    mut coin_balances: CoinBalances,
+    deposit_asset_info: AssetInfo,
+    receive_asset_info: AssetInfo,
     slippage_tolerance: Option<Decimal>,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
@@ -173,31 +146,47 @@ pub fn callback_provide_liquidity(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Get the amount of the asset that was received from the basket liquidation
-    let receive_asset_balance = receive_asset_before
-        .info
-        .query_balance(&deps.querier, env.contract.address.clone())?;
-    let assets_received = receive_asset_balance.checked_sub(receive_asset_before.amount)?;
+    // Update coin balances
+    coin_balances.update_balances(&deps.querier, &env)?;
 
-    let assets = vec![Asset::new(receive_asset_before.info, assets_received)].into();
+    // Provide liquidity with all assets returned from the basket liquidation
+    // and any that the caller sent with the original message.
+    let provide_liquidity_assets: AssetList = vec![Asset::new(
+        deposit_asset_info.clone(),
+        coin_balances.get_caller_balance(&receive_asset_info.to_string()),
+    )]
+    .into();
+
+    // Simulate providing liquidity
+    let lp_tokens_received =
+        pool.simulate_provide_liquidity(deps.as_ref(), provide_liquidity_assets.clone())?;
 
     // Provide liquidity to the pool
     let mut response = pool.provide_liquidity(
         deps.as_ref(),
-        assets,
+        provide_liquidity_assets,
         env.contract.address.clone(),
         slippage_tolerance,
     )?;
 
-    // Add a message to deposit the coins into the vault
-    response = response.add_message(
-        CallbackMsg::Deposit {
-            vault_address,
-            recipient,
-            deposit_asset_before,
-        }
-        .into_cosmos_msg(&env)?,
-    );
+    // Deposit any LP tokens the caller sent with the original message plus those
+    // received from this liquidity provision.
+    let amount_to_deposit = coin_balances
+        .get_caller_balance(&deposit_asset_info.to_string())
+        .checked_add(lp_tokens_received.amount)?;
+
+    // Deposit the coins into the vault
+    let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: vault_address.to_string(),
+        funds: vec![Coin {
+            denom: deposit_asset_info.to_string(),
+            amount: amount_to_deposit,
+        }],
+        msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Deposit {
+            receiver: Some(recipient.to_string()),
+        })?,
+    });
+    response = response.add_message(deposit_msg);
 
     Ok(response)
 }
@@ -208,26 +197,23 @@ pub fn callback_deposit(
     info: MessageInfo,
     vault_address: Addr,
     recipient: Addr,
-    deposit_asset_before: Asset,
+    mut coin_balances: CoinBalances,
+    deposit_asset_info: AssetInfo,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
     if info.sender != env.contract.address {
         return Err(ContractError::Unauthorized {});
     }
 
-    // Query the deposit asset balance of this contract
-    let deposit_asset_balance = deposit_asset_before
-        .info
-        .query_balance(&deps.querier, env.contract.address)?;
-
-    let assets_received = deposit_asset_balance.checked_sub(deposit_asset_before.amount)?;
+    // Update the coin balances
+    coin_balances.update_balances(&deps.querier, &env)?;
 
     // Deposit the coins into the vault
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
         funds: vec![Coin {
-            denom: deposit_asset_before.info.to_string(),
-            amount: assets_received,
+            denom: deposit_asset_info.to_string(),
+            amount: coin_balances.get_caller_balance(&deposit_asset_info.to_string()),
         }],
         msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Deposit {
             receiver: Some(recipient.to_string()),
