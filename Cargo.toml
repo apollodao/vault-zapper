@@ -49,10 +49,9 @@ schemars = "0.8.10"
 serde = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 cosmos-vault-standard = { git = "https://github.com/apollodao/cosmos-vault-standard", features = ["lockup"] }
-# cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router" }
-cw-dex-router = { path = "../cw-dex-router" }
+cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router" }
 cw-asset = "2.3.0"
-cw-dex = { path = "../cw-dex" }
+cw-dex = { git = "https://github.com/apollodao/cw-dex" }
 
 [dev-dependencies]
 cw-multi-test = "0.15.1"

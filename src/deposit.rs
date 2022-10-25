@@ -63,7 +63,7 @@ pub fn execute_deposit(
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
 
     //Set the target of the basket liquidation, depending on if depositable asset is an LP token or not
-    let receive_asset_info = match pool {
+    let receive_asset_info = match &pool {
         Some(x) => {
             // Get the assets in the pool
             let pool_tokens: Vec<AssetInfo> = x
@@ -163,6 +163,8 @@ pub fn callback_provide_liquidity(
     // Provide liquidity to the pool
     let mut response = pool.provide_liquidity(
         deps.as_ref(),
+        &env,
+        &info,
         provide_liquidity_assets,
         env.contract.address.clone(),
         slippage_tolerance,
