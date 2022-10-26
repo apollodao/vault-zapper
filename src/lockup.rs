@@ -30,13 +30,16 @@ pub fn execute_unlock(
     if info.funds.len() != 1 || info.funds[0].denom != vault_token_denom {
         return Err(ContractError::InvalidVaultToken {});
     }
+    let vault_token = info.funds[0].clone();
 
     // Call unlock on the vault
     let unlock_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
-        funds: info.funds,
+        funds: vec![vault_token.clone()],
         msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
-            ExtensionExecuteMsg::Lockup(LockupExecuteMsg::Unlock {}),
+            ExtensionExecuteMsg::Lockup(LockupExecuteMsg::Unlock {
+                amount: vault_token.amount,
+            }),
         ))?,
     });
 

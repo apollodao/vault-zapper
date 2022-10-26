@@ -28,12 +28,13 @@ pub fn execute_withdraw(
     recipient: Option<String>,
     withdraw_assets: WithdrawAssets,
 ) -> Result<Response, ContractError> {
-    let get_withdraw_msg = |vault_address: String, funds: Vec<Coin>, recipient: Option<String>| {
+    let get_withdraw_msg = |vault_address: String, vault_token: Coin, recipient: Option<String>| {
         Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address,
-            funds,
-            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Withdraw {
-                receiver: recipient,
+            funds: vec![vault_token.clone()],
+            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Redeem {
+                recipient,
+                amount: vault_token.amount,
             })?,
         }))
     };
@@ -71,14 +72,13 @@ pub fn execute_withdraw_unlocked(
     LOCKUP_IDS.save(deps.storage, info.sender.clone(), &lock_ids)?;
 
     // Proceed with normal withdraw
-
-    let get_withdraw_msg = |vault_address: String, funds: Vec<Coin>, recipient: Option<String>| {
+    let get_withdraw_msg = |vault_address: String, vault_token: Coin, recipient: Option<String>| {
         Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address,
-            funds,
+            funds: vec![vault_token],
             msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
                 ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
-                    receiver: recipient,
+                    recipient,
                     lockup_id: Some(lockup_id),
                 }),
             ))?,
@@ -107,7 +107,7 @@ pub fn withdraw<F>(
     get_withdraw_msg: F,
 ) -> Result<Response, ContractError>
 where
-    F: Fn(String, Vec<Coin>, Option<String>) -> StdResult<CosmosMsg>,
+    F: Fn(String, Coin, Option<String>) -> StdResult<CosmosMsg>,
 {
     let router = ROUTER.load(deps.storage)?;
 
@@ -136,6 +136,7 @@ where
     if info.funds.len() != 1 || info.funds[0].denom != vault_token_denom {
         return Err(ContractError::InvalidVaultToken {});
     }
+    let vault_token = info.funds[0].clone();
 
     // Check if withdrawal asset is an LP token.
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_asset).ok();
@@ -161,7 +162,7 @@ where
             if requested_denom == vault_asset.to_string() {
                 msgs.push(get_withdraw_msg(
                     vault_address.to_string(),
-                    info.funds,
+                    vault_token,
                     Some(recipient.to_string()),
                 )?);
                 return Ok(Response::new().add_messages(msgs));
@@ -169,7 +170,7 @@ where
                 // Add message to withdraw from vault, but return assets to this contract.
                 msgs.push(get_withdraw_msg(
                     vault_address.to_string(),
-                    info.funds,
+                    vault_token,
                     None,
                 )?);
             }
@@ -186,11 +187,8 @@ where
                 )?;
 
                 // Add messages to withdraw liquidity
-                let provide_liq_res = pool.withdraw_liquidity(
-                    deps.as_ref(),
-                    asset_withdrawn_from_vault,
-                    env.contract.address.clone(),
-                )?;
+                let provide_liq_res =
+                    pool.withdraw_liquidity(deps.as_ref(), &env, asset_withdrawn_from_vault)?;
                 response = merge_responses(vec![response, provide_liq_res]);
 
                 // Add messages to basket liquidate the assets withdrawn from the LP
@@ -235,11 +233,11 @@ where
                 // and return withdrawn assets to recipient.
                 msgs.push(get_withdraw_msg(
                     vault_address.to_string(),
-                    info.funds,
+                    vault_token,
                     None,
                 )?);
                 let res =
-                    pool.withdraw_liquidity(deps.as_ref(), asset_withdrawn_from_vault, recipient)?;
+                    pool.withdraw_liquidity(deps.as_ref(), &env, asset_withdrawn_from_vault)?;
                 return Ok(merge_responses(vec![
                     Response::new().add_messages(msgs),
                     res,

@@ -53,7 +53,7 @@ pub fn execute_deposit(
             contract_addr: vault_address.to_string(),
             funds: info.funds,
             msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-                receiver: Some(recipient.to_string()),
+                recipient: Some(recipient.to_string()),
             })?,
         });
         return Ok(Response::new().add_message(deposit_msg));
@@ -166,7 +166,6 @@ pub fn callback_provide_liquidity(
         &env,
         &info,
         provide_liquidity_assets,
-        env.contract.address.clone(),
         slippage_tolerance,
     )?;
 
@@ -184,7 +183,7 @@ pub fn callback_provide_liquidity(
             amount: amount_to_deposit,
         }],
         msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-            receiver: Some(recipient.to_string()),
+            recipient: Some(recipient.to_string()),
         })?,
     });
     response = response.add_message(deposit_msg);
@@ -217,7 +216,7 @@ pub fn callback_deposit(
             amount: coin_balances.get_caller_balance(&deposit_asset_info.to_string()),
         }],
         msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-            receiver: Some(recipient.to_string()),
+            recipient: Some(recipient.to_string()),
         })?,
     });
 
