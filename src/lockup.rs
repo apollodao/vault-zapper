@@ -1,12 +1,11 @@
-use cosmos_vault_standard::extensions::lockup::LockupExecuteMsg;
-use cosmos_vault_standard::msg::VaultInfo;
-use cosmos_vault_standard::msg::{
-    ExecuteMsg as VaultExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
-    QueryMsg as VaultQueryMsg,
-};
 use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, ReplyOn, Response, SubMsg,
     WasmMsg,
+};
+use cosmwasm_vault_standard::extensions::lockup::LockupExecuteMsg;
+use cosmwasm_vault_standard::VaultInfoResponse;
+use cosmwasm_vault_standard::{
+    ExtensionExecuteMsg, ExtensionQueryMsg, VaultStandardExecuteMsg, VaultStandardQueryMsg,
 };
 
 use crate::contract::UNLOCK_REPLY_ID;
@@ -20,11 +19,11 @@ pub fn execute_unlock(
     vault_address: Addr,
 ) -> Result<Response, ContractError> {
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_token_denom = vault_info.vault_token_denom;
+    let vault_token_denom = vault_info.vault_token;
 
     // Make sure vault token was sent
     if info.funds.len() != 1 || info.funds[0].denom != vault_token_denom {
@@ -36,11 +35,13 @@ pub fn execute_unlock(
     let unlock_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
         funds: vec![vault_token.clone()],
-        msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
-            ExtensionExecuteMsg::Lockup(LockupExecuteMsg::Unlock {
-                amount: vault_token.amount,
-            }),
-        ))?,
+        msg: to_binary(
+            &VaultStandardExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
+                ExtensionExecuteMsg::Lockup(LockupExecuteMsg::Unlock {
+                    amount: vault_token.amount,
+                }),
+            ),
+        )?,
     });
 
     // Temporarily store the caller's address so we can read it in the reply entrypoint

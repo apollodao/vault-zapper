@@ -5,28 +5,18 @@ use cw_dex::Pool;
 
 use crate::{msg::WithdrawAssets, state::ROUTER};
 
-use cosmos_vault_standard::msg::{ExtensionQueryMsg, QueryMsg as VaultQueryMsg, VaultInfo};
+use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<String>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let depositable_assets: Vec<String> = vault_info
-        .deposit_coins
-        .iter()
-        .map(|x| x.denom.clone())
-        .collect();
 
-    // For now we only support vaults that have one deposit asset.
-    // TODO: Support vaults with multiple deposit assets.
-    if depositable_assets.len() != 1 {
-        return Err(StdError::generic_err("Unsupported vault"));
-    }
-    let deposit_asset_info = AssetInfo::Native(depositable_assets[0].clone());
+    let deposit_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
 
     // Check if deposit asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
@@ -74,22 +64,12 @@ pub fn query_withdrawable_assets(
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_assets: Vec<String> = vault_info
-        .deposit_coins
-        .iter()
-        .map(|x| x.denom.clone())
-        .collect();
 
-    // For now we only support vaults that have one deposit asset.
-    // TODO: Support vaults with multiple deposit assets.
-    if vault_assets.len() != 1 {
-        return Err(StdError::generic_err("Unsupported vault"));
-    }
-    let withdraw_asset_info = AssetInfo::Native(vault_assets[0].clone());
+    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
 
     // Check if the withdrawn asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();

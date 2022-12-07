@@ -41,17 +41,22 @@ pub fn execute(
     let api = deps.api;
     match msg {
         ExecuteMsg::Deposit {
+            assets,
             vault_address,
             recipient,
             slippage_tolerance,
-        } => execute_deposit(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            recipient,
-            slippage_tolerance,
-        ),
+        } => {
+            let assets = assets.check(deps.api)?;
+            execute_deposit(
+                deps,
+                env,
+                info,
+                assets,
+                api.addr_validate(&vault_address)?,
+                recipient,
+                slippage_tolerance,
+            )
+        }
         ExecuteMsg::Withdraw {
             vault_address,
             recipient,

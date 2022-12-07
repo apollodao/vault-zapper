@@ -1,10 +1,10 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
-use cw_asset::AssetInfo;
+use cw_asset::{AssetInfo, AssetListUnchecked};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 
-use crate::helpers::CoinBalances;
+use crate::helpers::TokenBalances;
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -14,6 +14,7 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     Deposit {
+        assets: AssetListUnchecked,
         vault_address: String,
         recipient: Option<String>,
         slippage_tolerance: Option<Decimal>,
@@ -45,7 +46,7 @@ pub enum CallbackMsg {
         /// The pool to provide liquidity to
         pool: Pool,
         /// The coin balances of the contract and the coins received by the caller
-        coin_balances: CoinBalances,
+        coin_balances: TokenBalances,
         /// The asset that was received from the basket liquidation
         receive_asset_info: AssetInfo,
         /// The asset that should be deposited into the vault
@@ -56,7 +57,7 @@ pub enum CallbackMsg {
     Deposit {
         vault_address: Addr,
         recipient: Addr,
-        coin_balances: CoinBalances,
+        coin_balances: TokenBalances,
         deposit_asset_info: AssetInfo,
     },
 }

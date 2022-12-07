@@ -1,13 +1,10 @@
-use cosmos_vault_standard::{
-    extensions::lockup::LockupExecuteMsg,
-    msg::{
-        AssetsResponse, ExecuteMsg as VaultExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
-        QueryMsg as VaultQueryMsg, VaultInfo,
-    },
-};
 use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
-    WasmMsg,
+    Uint128, WasmMsg,
+};
+use cosmwasm_vault_standard::{
+    extensions::lockup::LockupExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
+    VaultInfoResponse, VaultStandardExecuteMsg, VaultStandardQueryMsg,
 };
 use cw_asset::{Asset, AssetInfo};
 use cw_dex::traits::Pool as PoolTrait;
@@ -32,7 +29,7 @@ pub fn execute_withdraw(
         Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address,
             funds: vec![vault_token.clone()],
-            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::Redeem {
+            msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Redeem {
                 recipient,
                 amount: vault_token.amount,
             })?,
@@ -76,12 +73,14 @@ pub fn execute_withdraw_unlocked(
         Ok::<CosmosMsg, StdError>(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address,
             funds: vec![vault_token],
-            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
-                ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
-                    recipient,
-                    lockup_id: Some(lockup_id),
-                }),
-            ))?,
+            msg: to_binary(
+                &VaultStandardExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
+                    ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
+                        recipient,
+                        lockup_id,
+                    }),
+                ),
+            )?,
         }))
     };
 
@@ -115,22 +114,12 @@ where
     let recipient = recipient.map_or(Ok(info.sender), |x| deps.api.addr_validate(&x))?;
 
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_token_denom = vault_info.vault_token_denom;
-    let vault_assets: Vec<String> = vault_info
-        .deposit_coins
-        .iter()
-        .map(|x| x.denom.clone())
-        .collect();
-
-    //For now we only support vaults with one deposit/withdraw asset
-    if vault_assets.len() != 1 {
-        return Err(ContractError::UnsupportedVault {});
-    }
-    let vault_asset = AssetInfo::Native(vault_assets[0].clone());
+    let vault_token_denom = vault_info.vault_token;
+    let vault_asset = AssetInfo::Native(vault_info.base_token.to_string());
 
     // Make sure vault token was sent
     if info.funds.len() != 1 || info.funds[0].denom != vault_token_denom {
@@ -146,13 +135,13 @@ where
 
     // Simulate withdrawal to know how many assets we will receive,
     // and then swap these for the requested asset.
-    let assets_withdrawn_from_vault: AssetsResponse = deps.querier.query_wasm_smart(
+    let amount_redeemed_from_vault: Uint128 = deps.querier.query_wasm_smart(
         vault_address.clone(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::PreviewRedeem {
-            shares: info.funds[0].amount,
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::PreviewRedeem {
+            amount: info.funds[0].amount,
         },
     )?;
-    let asset_withdrawn_from_vault: Asset = assets_withdrawn_from_vault.coins[0].clone().into();
+    let asset_withdrawn_from_vault = Asset::new(vault_asset.clone(), amount_redeemed_from_vault);
 
     // Check requested withdrawal assets
     match withdraw_assets {
@@ -181,10 +170,8 @@ where
             // to withdraw liquidity first.
             if let Some(pool) = pool {
                 // Simulate withdrawal of liquidity to get the assets that will be returned
-                let assets_withdrawn_from_lp = pool.simulate_withdraw_liquidity(
-                    deps.as_ref(),
-                    asset_withdrawn_from_vault.clone(),
-                )?;
+                let assets_withdrawn_from_lp =
+                    pool.simulate_withdraw_liquidity(deps.as_ref(), &asset_withdrawn_from_vault)?;
 
                 // Add messages to withdraw liquidity
                 let provide_liq_res =
@@ -201,7 +188,7 @@ where
             } else {
                 // Basket liquidate the assets withdrawn from the vault
                 response = response.add_messages(router.basket_liquidate_msgs(
-                    assets_withdrawn_from_vault.coins.into(),
+                    vec![asset_withdrawn_from_vault].into(),
                     &AssetInfo::native(requested_denom),
                     None,
                     Some(recipient.to_string()),

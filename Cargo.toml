@@ -40,18 +40,19 @@ optimize = """docker run --rm -v "$(pwd)":/code \
 """
 
 [dependencies]
+apollo-utils = { git = "https://github.com/apollodao/apollo-utils.git", rev = "0421a13a2b7cbbce76ea88563a9ef4fce3d1e6ee" }
 cosmwasm-schema = "1.1.3"
-cosmwasm-std = "1.1.3"
-cosmwasm-storage = "1.1.3"
-cw-storage-plus = "0.15.1"
-cw2 = "0.15.1"
+cosmwasm-std = "1"
+cw-storage-plus = "0.16"
+cw2 = "0.16"
+cw20 = "0.16"
 schemars = "0.8.10"
 serde = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
-cosmos-vault-standard = { git = "https://github.com/apollodao/cosmos-vault-standard", features = ["lockup"] }
+cosmwasm-vault-standard = { git = "https://github.com/apollodao/cosmwasm-vault-standard", features = ["lockup"] }
 cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router" }
-cw-asset = "2.3.0"
-cw-dex = { git = "https://github.com/apollodao/cw-dex" }
+cw-asset = { git="https://github.com/apollodao/cw-asset.git", rev = "5e51773da42ef82faa67576454e8c4b0971097f2" }
+cw-dex = {git = "https://github.com/apollodao/cw-dex", rev = "de7394fdbc74a3401f4227f81389413991b309e3" }
 
 [dev-dependencies]
 cw-multi-test = "0.15.1"
