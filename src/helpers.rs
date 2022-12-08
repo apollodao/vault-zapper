@@ -62,7 +62,7 @@ impl TokenBalances {
             Self::get_contract_balances_helper(deps, env, caller_funds)?.to_vec();
 
         // Deduct the received funds from the current balances
-        for asset in caller_funds.iter() {
+        for asset in caller_funds {
             contract_balances
                 .iter_mut()
                 .find(|c| c.info == asset.info)
@@ -75,18 +75,9 @@ impl TokenBalances {
         })
     }
 
-    pub fn get_caller_balance(&self, denom: &str) -> Uint128 {
+    pub fn get_caller_balance(&self, asset: &AssetInfo) -> Uint128 {
         self.caller_balances
-            .iter()
-            .find(|c| &c.info.to_string() == denom)
-            .map(|c| c.amount)
-            .unwrap_or_default()
-    }
-
-    pub fn get_contract_balance(&self, denom: &str) -> Uint128 {
-        self.contract_balances
-            .iter()
-            .find(|c| &c.info.to_string() == denom)
+            .find(asset)
             .map(|c| c.amount)
             .unwrap_or_default()
     }
@@ -99,20 +90,21 @@ impl TokenBalances {
         // For every coin in new_balances:
         // Calculate the difference between the new balance and the old balance.
         // Add the difference to the caller_balance.
-        for asset in new_balances.iter() {
+        for asset in &new_balances {
             let old_balance = self
                 .contract_balances
-                .iter()
-                .find(|a| a.info == asset.info)
+                .find(&asset.info)
                 .map(|a| a.amount)
                 .unwrap_or_default();
 
             let difference = asset.amount.checked_sub(old_balance)?;
             if difference > Uint128::zero() {
-                self.caller_balances
+                let mut caller_balances = self.caller_balances.to_vec();
+                caller_balances
                     .iter_mut()
                     .find(|a| a.info == asset.info)
                     .map(|a| a.amount += difference);
+                self.caller_balances = caller_balances.into();
             }
         }
 
@@ -130,14 +122,14 @@ impl TokenBalances {
             .query_all_balances(env.contract.address.to_string())?
             .into();
         let contract_assets: Vec<AssetInfo> = contract_balances
-            .iter()
+            .into_iter()
             .map(|c| c.info.to_owned())
             .collect();
         // if provided, query balances for assets not included in above queried balances
         // should only be cw20s
         if assets_to_query.len() > 0 {
             let other_contract_balances = assets_to_query
-                .iter()
+                .into_iter()
                 .filter_map(|a| {
                     if matches!(a.info, AssetInfo::Cw20(_)) && !contract_assets.contains(&a.info) {
                         let contract_balance: Uint128 = deps

@@ -1,6 +1,7 @@
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, WasmMsg,
+    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, StdResult,
+    WasmMsg,
 };
 use cosmwasm_vault_standard::VaultInfoResponse;
 use cosmwasm_vault_standard::{
@@ -39,12 +40,22 @@ pub fn execute_deposit(
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if caller_funds.len() == 1 && &caller_funds.get(0)?.info == &deposit_asset_info {
+    if caller_funds.len() == 1 && &caller_funds.to_vec()[0].info == &deposit_asset_info {
         let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
-            funds: caller_funds.get_native(),
+            funds: caller_funds
+                .into_iter()
+                .filter_map(|a| {
+                    let native: StdResult<Coin> = a.try_into();
+                    if let Ok(coin) = native {
+                        Some(coin)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-                amount: caller_funds.get(0)?.amount,
+                amount: caller_funds.to_vec()[0].amount,
                 recipient: Some(recipient.to_string()),
             })?,
         });
@@ -147,7 +158,7 @@ pub fn callback_provide_liquidity(
     // and any that the caller sent with the original message.
     let provide_liquidity_assets: AssetList = vec![Asset::new(
         deposit_asset_info.clone(),
-        coin_balances.get_caller_balance(&receive_asset_info.to_string()),
+        coin_balances.get_caller_balance(&receive_asset_info),
     )]
     .into();
 
@@ -170,7 +181,7 @@ pub fn callback_provide_liquidity(
     // Deposit any LP tokens the caller sent with the original message plus those
     // received from this liquidity provision.
     let amount_to_deposit = coin_balances
-        .get_caller_balance(&deposit_asset_info.to_string())
+        .get_caller_balance(&deposit_asset_info)
         .checked_add(lp_tokens_received.amount)?;
 
     // Deposit the coins into the vault
@@ -208,7 +219,7 @@ pub fn callback_deposit(
     coin_balances.update_balances(deps.as_ref(), &env)?;
 
     // Deposit the coins into the vault
-    let caller_balance = coin_balances.get_caller_balance(&deposit_asset_info.to_string());
+    let caller_balance = coin_balances.get_caller_balance(&deposit_asset_info);
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
         funds: vec![Coin {
