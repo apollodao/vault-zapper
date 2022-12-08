@@ -268,6 +268,22 @@ dependencies = [
 [[package]]
 name = "cw-dex"
 version = "0.0.1"
+source = "git+https://github.com/apollodao/cw-dex?rev=19d3c9be9edc8ca48cdeb02c4deecc0b7daed813#19d3c9be9edc8ca48cdeb02c4deecc0b7daed813"
+dependencies = [
+ "apollo-utils 0.1.0 (git+https://github.com/apollodao/apollo-utils.git?rev=dd3da52653d3dc350b20b46f363ebcfdcd64aa27)",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-asset",
+ "cw-storage-plus 0.16.0",
+ "cw-utils 0.11.1",
+ "cw-utils 0.16.0",
+ "cw20",
+ "thiserror",
+]
+
+[[package]]
+name = "cw-dex"
+version = "0.0.1"
 source = "git+https://github.com/apollodao/cw-dex?rev=de7394fdbc74a3401f4227f81389413991b309e3#de7394fdbc74a3401f4227f81389413991b309e3"
 dependencies = [
  "apollo-utils 0.1.0 (git+https://github.com/apollodao/apollo-utils.git?rev=dd3da52653d3dc350b20b46f363ebcfdcd64aa27)",
@@ -284,14 +300,14 @@ dependencies = [
 [[package]]
 name = "cw-dex-router"
 version = "0.1.0"
-source = "git+https://github.com/apollodao/cw-dex-router#4de8f6f48da1ea8091bfcb54e39b0f36301c2b52"
+source = "git+https://github.com/apollodao/cw-dex-router#de52c865376dae5b1bffce0b1fac96a4a4f444b0"
 dependencies = [
  "apollo-utils 0.1.0 (git+https://github.com/apollodao/apollo-utils.git?rev=0421a13a2b7cbbce76ea88563a9ef4fce3d1e6ee)",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-asset",
  "cw-controllers",
- "cw-dex",
+ "cw-dex 0.0.1 (git+https://github.com/apollodao/cw-dex?rev=19d3c9be9edc8ca48cdeb02c4deecc0b7daed813)",
  "cw-storage-plus 0.16.0",
  "cw2 0.16.0",
  "cw20",
@@ -935,7 +951,7 @@ dependencies = [
  "cosmwasm-std",
  "cosmwasm-vault-standard",
  "cw-asset",
- "cw-dex",
+ "cw-dex 0.0.1 (git+https://github.com/apollodao/cw-dex?rev=de7394fdbc74a3401f4227f81389413991b309e3)",
  "cw-dex-router",
  "cw-multi-test",
  "cw-storage-plus 0.16.0",

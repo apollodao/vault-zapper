@@ -38,6 +38,11 @@ optimize = """docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
   cosmwasm/rust-optimizer:0.12.6
 """
+optimize-arm64 = """docker run --rm -v "$(pwd)":/code \
+--mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+--mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+cosmwasm/rust-optimizer-arm64:0.12.8
+"""
 
 [dependencies]
 apollo-utils = { git = "https://github.com/apollodao/apollo-utils.git", rev = "0421a13a2b7cbbce76ea88563a9ef4fce3d1e6ee" }
@@ -50,7 +55,7 @@ schemars = "0.8.10"
 serde = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 cosmwasm-vault-standard = { git = "https://github.com/apollodao/cosmwasm-vault-standard", features = ["lockup"] }
-cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router" }
+cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router", features = ["library"] }
 cw-asset = { git="https://github.com/apollodao/cw-asset.git", rev = "5e51773da42ef82faa67576454e8c4b0971097f2" }
 cw-dex = {git = "https://github.com/apollodao/cw-dex", rev = "de7394fdbc74a3401f4227f81389413991b309e3" }
 
