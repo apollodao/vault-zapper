@@ -55,9 +55,16 @@ schemars = "0.8.10"
 serde = { version = "1.0.145", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 cosmwasm-vault-standard = { git = "https://github.com/apollodao/cosmwasm-vault-standard", features = ["lockup"] }
-cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router", features = ["library"] }
+cw-dex-router = { git = "https://github.com/apollodao/cw-dex-router", rev = "1db8457c7e7bb1dd093c086d8ef73e7105703343", features = ["library"] }
 cw-asset = { git="https://github.com/apollodao/cw-asset.git", rev = "5e51773da42ef82faa67576454e8c4b0971097f2" }
 cw-dex = {git = "https://github.com/apollodao/cw-dex", rev = "de7394fdbc74a3401f4227f81389413991b309e3" }
 
 [dev-dependencies]
+apollo-vault = { git = "https://github.com/apollodao/apollo-vaults", features = ["lockup", "force-unlock"], default-features = false }
+osmosis-vault = { git = "https://github.com/apollodao/apollo-vaults" }
+osmosis-liquidity-helper = { git = "https://github.com/apollodao/osmosis-liquidity-helper.git", rev = "2bacac4a23a7ace472fef153190db311c11ad082", features = ["library"] }
+osmosis-std = "0.13.1"
 cw-multi-test = "0.15.1"
+osmosis-testing = { git = "https://github.com/apollodao/osmosis-rust.git", rev = "52ca8eaa4b2926fea01a68f4d7e7253ad29d88b3" }
+cw-it = { git = "https://github.com/apollodao/cw-it", rev = "64baab334a3982d0b41fbc2810d9e311c14337da" }
+test-case = "2.2.2"
