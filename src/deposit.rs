@@ -1,7 +1,7 @@
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Uint128, WasmMsg,
+    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
+    WasmMsg,
 };
 use cosmwasm_vault_standard::VaultInfoResponse;
 use cosmwasm_vault_standard::{
@@ -18,7 +18,7 @@ pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    mut caller_funds: AssetList,
+    caller_funds: AssetList,
     vault_address: Addr,
     recipient: Option<String>,
     slippage_tolerance: Option<Decimal>,
@@ -143,7 +143,7 @@ pub fn callback_provide_liquidity(
 
     // Provide liquidity with all assets returned from the basket liquidation
     // and any that the caller sent with the original message.
-    let mut provide_liquidity_assets = pool
+    let provide_liquidity_assets: AssetList = pool
         .get_pool_liquidity(deps.as_ref())?
         .into_iter()
         .filter_map(|a| {
@@ -154,9 +154,8 @@ pub fn callback_provide_liquidity(
                 None
             }
         })
-        .collect::<Vec<Asset>>();
-    provide_liquidity_assets.sort_by(|a, b| a.info.to_string().cmp(&b.info.to_string()));
-    let provide_liquidity_assets: AssetList = provide_liquidity_assets.into();
+        .collect::<Vec<Asset>>()
+        .into();
 
     // Simulate providing liquidity
     let lp_tokens_received =
