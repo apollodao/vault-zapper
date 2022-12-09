@@ -27,10 +27,14 @@ incremental = false
 overflow-checks = true
 
 [features]
+default = []
 # for more explicit tests, cargo test --features=backtraces
 backtraces = ["cosmwasm-std/backtraces"]
 # use library feature to disable all instantiate/execute/query exports
 library = []
+osmosis = ["cw-dex/osmosis"]
+astroport = ["cw-dex/astroport"]
+junoswap = ["cw-dex/junoswap"]
 
 [package.metadata.scripts]
 optimize = """docker run --rm -v "$(pwd)":/code \
@@ -61,7 +65,7 @@ cw-dex = {git = "https://github.com/apollodao/cw-dex", rev = "de7394fdbc74a3401f
 
 [dev-dependencies]
 apollo-vault = { git = "https://github.com/apollodao/apollo-vaults", features = ["lockup", "force-unlock"], default-features = false }
-osmosis-vault = { git = "https://github.com/apollodao/apollo-vaults" }
+osmosis-vault = { git = "https://github.com/apollodao/apollo-vaults", features = ["library"] }
 osmosis-liquidity-helper = { git = "https://github.com/apollodao/osmosis-liquidity-helper.git", rev = "2bacac4a23a7ace472fef153190db311c11ad082", features = ["library"] }
 osmosis-std = "0.13.1"
 cw-multi-test = "0.15.1"

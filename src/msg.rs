@@ -47,10 +47,6 @@ pub enum CallbackMsg {
         pool: Pool,
         /// The coin balances of the contract and the coins received by the caller
         coin_balances: TokenBalances,
-        /// The asset that was received from the basket liquidation
-        receive_asset_info: AssetInfo,
-        /// The asset that should be deposited into the vault
-        deposit_asset_info: AssetInfo,
         /// An optional slippage tolerance to use when providing liquidity
         slippage_tolerance: Option<Decimal>,
     },
@@ -66,7 +62,7 @@ impl CallbackMsg {
     pub fn into_cosmos_msg(&self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(self)?,
+            msg: to_binary(&ExecuteMsg::Callback(self.clone()))?,
             funds: vec![],
         }))
     }
@@ -84,6 +80,9 @@ pub enum QueryMsg {
     #[returns(Vec<WithdrawAssets>)]
     WithdrawableAssets { vault_address: String },
 }
+
+#[cw_serde]
+pub struct MigrateMsg {}
 
 #[cw_serde]
 pub enum WithdrawAssets {

@@ -8,7 +8,7 @@ use cw2::set_contract_version;
 use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
-use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::{query_depositable_assets, query_withdrawable_assets};
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
@@ -92,8 +92,6 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                receive_asset_info,
-                deposit_asset_info,
                 slippage_tolerance,
             } => callback_provide_liquidity(
                 deps,
@@ -103,8 +101,6 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                deposit_asset_info,
-                receive_asset_info,
                 slippage_tolerance,
             ),
             CallbackMsg::Deposit {
@@ -177,5 +173,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     }
 }
 
-#[cfg(test)]
-mod tests {}
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    Ok(Response::default())
+}

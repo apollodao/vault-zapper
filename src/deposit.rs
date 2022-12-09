@@ -1,7 +1,7 @@
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, StdResult,
-    WasmMsg,
+    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128, WasmMsg,
 };
 use cosmwasm_vault_standard::VaultInfoResponse;
 use cosmwasm_vault_standard::{
@@ -18,7 +18,7 @@ pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    caller_funds: AssetList,
+    mut caller_funds: AssetList,
     vault_address: Addr,
     recipient: Option<String>,
     slippage_tolerance: Option<Decimal>,
@@ -45,14 +45,7 @@ pub fn execute_deposit(
             contract_addr: vault_address.to_string(),
             funds: caller_funds
                 .into_iter()
-                .filter_map(|a| {
-                    let native: StdResult<Coin> = a.try_into();
-                    if let Ok(coin) = native {
-                        Some(coin)
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(|a| a.try_into().ok())
                 .collect(),
             msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
                 amount: caller_funds.to_vec()[0].amount,
@@ -66,25 +59,17 @@ pub fn execute_deposit(
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
 
     //Set the target of the basket liquidation, depending on if depositable asset is an LP token or not
-    let receive_asset_info = match &pool {
-        Some(x) => {
+    let receive_asset_infos = match &pool {
+        Some(pool) => {
             // Get the assets in the pool
-            let pool_tokens: Vec<AssetInfo> = x
-                .get_pool_liquidity(deps.as_ref())?
+            pool.get_pool_liquidity(deps.as_ref())?
                 .into_iter()
                 .map(|x| x.info.clone())
-                .collect();
-
-            // We just choose the first asset in the pool as the target for the basket liquidation.
-            // This could probably be optimized, but for now I think it's fine.
-            pool_tokens
-                .first()
-                .ok_or(ContractError::UnsupportedVault {})?
-                .clone()
+                .collect()
         }
         None => {
             //Not an LP token. Use the depositable_asset as the target for the basket liquidation
-            deposit_asset_info.clone()
+            vec![deposit_asset_info.clone()]
         }
     };
 
@@ -93,11 +78,17 @@ pub fn execute_deposit(
 
     // Basket Liquidate deposited coins
     // We only liquidate the coins that are not already the target asset
-    let liquidate_coins: Vec<Coin> = info
-        .funds
+    let liquidate_coins = caller_funds
         .into_iter()
-        .filter(|x| x.denom != receive_asset_info.to_string())
-        .collect();
+        .filter_map(|a| {
+            if !receive_asset_infos.contains(&a.info) {
+                a.try_into().ok()
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<Coin>>();
+    let receive_asset_info = receive_asset_infos[0].clone();
     let mut msgs = if liquidate_coins.len() > 0 {
         router.basket_liquidate_msgs(liquidate_coins.into(), &receive_asset_info, None, None)?
     } else {
@@ -112,8 +103,6 @@ pub fn execute_deposit(
                 recipient,
                 pool,
                 coin_balances: token_balances,
-                deposit_asset_info,
-                receive_asset_info,
                 slippage_tolerance,
             }
             .into_cosmos_msg(&env)?,
@@ -142,8 +131,6 @@ pub fn callback_provide_liquidity(
     recipient: Addr,
     pool: Pool,
     mut coin_balances: TokenBalances,
-    deposit_asset_info: AssetInfo,
-    receive_asset_info: AssetInfo,
     slippage_tolerance: Option<Decimal>,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
@@ -156,11 +143,20 @@ pub fn callback_provide_liquidity(
 
     // Provide liquidity with all assets returned from the basket liquidation
     // and any that the caller sent with the original message.
-    let provide_liquidity_assets: AssetList = vec![Asset::new(
-        deposit_asset_info.clone(),
-        coin_balances.get_caller_balance(&receive_asset_info),
-    )]
-    .into();
+    let mut provide_liquidity_assets = pool
+        .get_pool_liquidity(deps.as_ref())?
+        .into_iter()
+        .filter_map(|a| {
+            let balance = coin_balances.get_caller_balance(&a.info);
+            if balance > Uint128::zero() {
+                Some(Asset::new(a.info.clone(), balance))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<Asset>>();
+    provide_liquidity_assets.sort_by(|a, b| a.info.to_string().cmp(&b.info.to_string()));
+    let provide_liquidity_assets: AssetList = provide_liquidity_assets.into();
 
     // Simulate providing liquidity
     let lp_tokens_received =
@@ -181,14 +177,14 @@ pub fn callback_provide_liquidity(
     // Deposit any LP tokens the caller sent with the original message plus those
     // received from this liquidity provision.
     let amount_to_deposit = coin_balances
-        .get_caller_balance(&deposit_asset_info)
+        .get_caller_balance(&lp_tokens_received.info)
         .checked_add(lp_tokens_received.amount)?;
 
     // Deposit the coins into the vault
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
         funds: vec![Coin {
-            denom: deposit_asset_info.to_string(),
+            denom: lp_tokens_received.info.to_string(),
             amount: amount_to_deposit,
         }],
         msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {

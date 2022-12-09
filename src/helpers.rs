@@ -92,7 +92,7 @@ impl TokenBalances {
         // Add the difference to the caller_balance.
         for asset in &new_balances {
             let old_balance = self
-                .contract_balances
+                .caller_balances
                 .find(&asset.info)
                 .map(|a| a.amount)
                 .unwrap_or_default();
