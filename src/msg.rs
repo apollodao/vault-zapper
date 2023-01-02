@@ -24,9 +24,6 @@ pub enum ExecuteMsg {
         recipient: Option<String>,
         withdraw_assets: WithdrawAssets,
     },
-    Unlock {
-        vault_address: String,
-    },
     WithdrawUnlocked {
         vault_address: String,
         lockup_id: u64,
