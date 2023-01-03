@@ -1,13 +1,17 @@
-use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
-use crate::error::ContractError;
-use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use crate::query::{query_depositable_assets, query_withdrawable_assets};
-use crate::state::ROUTER;
-use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+};
 use cw2::set_contract_version;
+
+use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
+use crate::error::ContractError;
+use crate::lockup::execute_unlock;
+use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::query::{query_depositable_assets, query_withdrawable_assets};
+use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
+use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -65,6 +69,9 @@ pub fn execute(
             recipient,
             withdraw_assets,
         ),
+        ExecuteMsg::Unlock { vault_address } => {
+            execute_unlock(deps, env, info, api.addr_validate(&vault_address)?)
+        }
         ExecuteMsg::WithdrawUnlocked {
             vault_address,
             lockup_id,
@@ -125,6 +132,44 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
+    }
+}
+
+pub const UNLOCK_REPLY_ID: u64 = 0u64;
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    match msg.id {
+        UNLOCK_REPLY_ID => {
+            let response = msg
+                .result
+                .into_result()
+                .map_err(|x| ContractError::Generic(x))?;
+
+            // Parse lockup ID from data field
+            let lockup_id: u64 = from_binary(
+                &response
+                    .data
+                    .ok_or(ContractError::Generic("No data in reply".to_string()))?,
+            )?;
+
+            // Read temporarily stored caller address
+            let caller_addr = TEMP_UNLOCK_CALLER.load(deps.storage)?;
+
+            //Read users lock Ids.
+            let mut lock_ids = LOCKUP_IDS.load(deps.storage, caller_addr.clone())?;
+
+            lock_ids.push(lockup_id);
+
+            // Store lockup_id
+            LOCKUP_IDS.save(deps.storage, caller_addr, &lock_ids)?;
+
+            //Erase temp caller address
+            TEMP_UNLOCK_CALLER.remove(deps.storage);
+
+            Ok(Response::default())
+        }
+        _ => Err(ContractError::Generic("Invalid reply id".to_string())),
     }
 }
 

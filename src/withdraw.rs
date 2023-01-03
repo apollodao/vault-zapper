@@ -1,5 +1,6 @@
 use cosmwasm_std::{
-    wasm_execute, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
+    to_binary, wasm_execute, Addr, Coin, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128, WasmMsg,
 };
 use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cosmwasm_vault_standard::{
@@ -10,7 +11,7 @@ use cw_asset::{Asset, AssetInfo};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
-use crate::state::{WithdrawMsg, ROUTER};
+use crate::state::{WithdrawMsg, LOCKUP_IDS, ROUTER};
 use crate::{helpers::merge_responses, msg::WithdrawAssets, ContractError};
 
 pub fn execute_withdraw(
@@ -76,6 +77,23 @@ pub fn execute_withdraw_unlocked(
     recipient: Option<String>,
     withdraw_assets: WithdrawAssets,
 ) -> Result<Response, ContractError> {
+    // Load users lockup IDs.
+    let mut lock_ids = LOCKUP_IDS
+        .load(deps.storage, info.sender.clone())
+        .unwrap_or_default();
+
+    // Check if lockup ID is valid.
+    if !lock_ids.contains(&lockup_id) {
+        return Err(ContractError::Std(StdError::not_found(format!(
+            "lockup_id {}",
+            lockup_id
+        ))));
+    }
+
+    // Remove lockup ID from users lockup IDs.
+    lock_ids.retain(|x| *x != lockup_id);
+    LOCKUP_IDS.save(deps.storage, info.sender.clone(), &lock_ids)?;
+
     // Query the vault info
     let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
