@@ -1,7 +1,11 @@
+use apollo_utils::submessages::{find_event, parse_attribute_value};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+};
+use cosmwasm_vault_standard::extensions::lockup::{
+    UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
 use cw2::set_contract_version;
 
@@ -146,18 +150,22 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 .into_result()
                 .map_err(|x| ContractError::Generic(x))?;
 
-            // Parse lockup ID from data field
-            let lockup_id: u64 = from_binary(
-                &response
-                    .data
-                    .ok_or(ContractError::Generic("No data in reply".to_string()))?,
+            // Parse lockup ID from events
+            let lockup_id: u64 = parse_attribute_value(
+                find_event(
+                    &response,
+                    &format!("wasm-{}", UNLOCKING_POSITION_CREATED_EVENT_TYPE),
+                )?,
+                UNLOCKING_POSITION_ATTR_KEY,
             )?;
 
             // Read temporarily stored caller address
             let caller_addr = TEMP_UNLOCK_CALLER.load(deps.storage)?;
 
             //Read users lock Ids.
-            let mut lock_ids = LOCKUP_IDS.load(deps.storage, caller_addr.clone())?;
+            let mut lock_ids = LOCKUP_IDS
+                .load(deps.storage, caller_addr.clone())
+                .unwrap_or_default();
 
             lock_ids.push(lockup_id);
 
