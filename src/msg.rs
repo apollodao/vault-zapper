@@ -79,6 +79,14 @@ pub enum QueryMsg {
     /// this vec when calling Withdraw or WithdrawUnlocked.
     #[returns(Vec<WithdrawAssets>)]
     WithdrawableAssets { vault_address: String },
+
+    /// Returns Vec<UnlockingPosition>. The user may withdraw from these positions
+    /// if they have finished unlocking by calling WithdrawUnlocked.
+    #[returns(Vec<cosmwasm_vault_standard::extensions::lockup::UnlockingPosition>)]
+    UnlockingPositions {
+        vault_address: String,
+        owner: String,
+    },
 }
 
 #[cw_serde]

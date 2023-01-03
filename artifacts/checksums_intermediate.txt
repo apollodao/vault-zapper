@@ -1,1 +1,1 @@
-4732ed97faed0603f42433f026cea9117d401e04a06b29525dda1e779b3e8f47  ./target/wasm32-unknown-unknown/release/vault_zapper.wasm
+83e5e7d6b2ff36e40d0131e2251935048055ec38a45d7f74509a30e2c6621b01  ./target/wasm32-unknown-unknown/release/vault_zapper.wasm

@@ -13,7 +13,9 @@ use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_depos
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use crate::query::{query_depositable_assets, query_withdrawable_assets};
+use crate::query::{
+    query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
+};
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
@@ -126,7 +128,7 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::DepositableAssets { vault_address } => to_binary(&query_depositable_assets(
             deps,
@@ -135,6 +137,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawableAssets { vault_address } => to_binary(&query_withdrawable_assets(
             deps,
             deps.api.addr_validate(&vault_address)?,
+        )?),
+        QueryMsg::UnlockingPositions {
+            vault_address,
+            owner,
+        } => to_binary(&query_user_unlocking_positions(
+            deps,
+            env,
+            deps.api.addr_validate(&vault_address)?,
+            deps.api.addr_validate(&owner)?,
         )?),
     }
 }

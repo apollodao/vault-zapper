@@ -1,10 +1,12 @@
-use cosmwasm_std::{Addr, Deps, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, Env, StdError, StdResult};
 use cw_asset::AssetInfo;
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
+use crate::state::LOCKUP_IDS;
 use crate::{msg::WithdrawAssets, state::ROUTER};
 
+use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<String>> {
@@ -131,4 +133,30 @@ pub fn query_withdrawable_assets(
     }
 
     Ok(withdrawable_assets)
+}
+
+pub fn query_user_unlocking_positions(
+    deps: Deps,
+    env: Env,
+    vault_address: Addr,
+    user: Addr,
+) -> StdResult<Vec<UnlockingPosition>> {
+    let mut user_lockup_ids = LOCKUP_IDS.load(deps.storage, user).unwrap_or_default();
+    user_lockup_ids.sort();
+    let mut unlocking_positions: Vec<UnlockingPosition> = deps.querier.query_wasm_smart(
+        vault_address,
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
+            LockupQueryMsg::UnlockingPositions {
+                owner: env.contract.address.to_string(),
+                start_after: if user_lockup_ids.len() > 0 && user_lockup_ids[0] > 0 {
+                    Some(user_lockup_ids[0] - 1)
+                } else {
+                    None
+                },
+                limit: None,
+            },
+        )),
+    )?;
+    unlocking_positions.retain(|p| user_lockup_ids.contains(&p.id));
+    Ok(unlocking_positions)
 }
