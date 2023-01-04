@@ -11,7 +11,7 @@ use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
 use crate::state::{WithdrawMsg, LOCKUP_IDS, ROUTER};
-use crate::{helpers::merge_responses, msg::WithdrawAssets, ContractError};
+use crate::{helpers::merge_responses, msg::ZapTo, ContractError};
 
 pub fn execute_withdraw(
     deps: DepsMut,
@@ -19,7 +19,7 @@ pub fn execute_withdraw(
     info: MessageInfo,
     vault_address: Addr,
     recipient: Option<String>,
-    withdraw_assets: WithdrawAssets,
+    withdraw_assets: ZapTo,
 ) -> Result<Response, ContractError> {
     // Query the vault info
     let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
@@ -74,7 +74,7 @@ pub fn execute_withdraw_unlocked(
     vault_address: Addr,
     lockup_id: u64,
     recipient: Option<String>,
-    withdraw_assets: WithdrawAssets,
+    withdraw_assets: ZapTo,
 ) -> Result<Response, ContractError> {
     // Load users lockup IDs.
     let mut lock_ids = LOCKUP_IDS
@@ -143,7 +143,7 @@ pub fn withdraw<F>(
     info: &MessageInfo,
     vault_address: Addr,
     recipient: Option<String>,
-    withdraw_assets: WithdrawAssets,
+    withdraw_assets: ZapTo,
     get_withdraw_msg: F,
 ) -> Result<Response, ContractError>
 where
@@ -169,10 +169,10 @@ where
 
     // Check requested withdrawal assets
     match withdraw_assets {
-        WithdrawAssets::Single(requested_denom) => {
+        ZapTo::Asset(requested_asset) => {
             // If the requested denom is the same as the vaults withdrawal asset
             // just withdraw directly to the recipient.
-            if requested_denom == vault_asset.to_string() {
+            if requested_asset == vault_asset {
                 msgs.push(
                     get_withdraw_msg(vault_address.to_string(), Some(recipient.to_string()))?.msg,
                 );
@@ -201,7 +201,7 @@ where
                     // Add messages to basket liquidate the assets withdrawn from the LP
                     response = response.add_messages(router.basket_liquidate_msgs(
                         assets_withdrawn_from_lp,
-                        &AssetInfo::native(requested_denom),
+                        &requested_asset,
                         None,
                         Some(recipient.to_string()),
                     )?);
@@ -209,7 +209,7 @@ where
                     // Basket liquidate the assets withdrawn from the vault
                     response = response.add_messages(router.basket_liquidate_msgs(
                         vec![asset_withdrawn_from_vault].into(),
-                        &AssetInfo::native(requested_denom),
+                        &requested_asset,
                         None,
                         Some(recipient.to_string()),
                     )?);
@@ -218,25 +218,13 @@ where
                 return Ok(response);
             }
         }
-        WithdrawAssets::Multi(requested_denoms) => {
-            // We currently only support withdrawing multiple assets if these
-            // the vault returns an LP token and the requested assets match the
-            // assets in the pool.
+        ZapTo::Underlying {} => {
+            // We currently only support withdrawing multiple assets if this
+            // vault returns an LP token, in which case we return the underlying
+            // LP assets from withdrawing liquidity to the user.
             // TODO: Support withdrawing multiple assets that are not in the vault.
             // To do this we need to add functionality to cw-dex-router.
             if let Some(pool) = pool {
-                // Check that the requested assets match the assets in the pool
-                let pool_assets = pool
-                    .get_pool_liquidity(deps.as_ref())?
-                    .into_iter()
-                    .map(|x| x.info.to_string())
-                    .collect::<Vec<_>>();
-                if requested_denoms != pool_assets {
-                    return Err(ContractError::Generic(
-                        "Requested assets do not match assets in pool".to_string(),
-                    ));
-                }
-
                 // Add message to withdraw asset from vault, withdraw liquidity,
                 // and return withdrawn assets to recipient.
                 let withdraw = get_withdraw_msg(vault_address.to_string(), None)?;

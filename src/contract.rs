@@ -66,7 +66,7 @@ pub fn execute(
         ExecuteMsg::Withdraw {
             vault_address,
             recipient,
-            withdraw_assets,
+            zap_to: withdraw_assets,
         } => execute_withdraw(
             deps,
             env,
@@ -82,7 +82,7 @@ pub fn execute(
             vault_address,
             lockup_id,
             recipient,
-            withdraw_assets,
+            zap_to: withdraw_assets,
         } => execute_withdraw_unlocked(
             deps,
             env,

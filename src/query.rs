@@ -4,12 +4,12 @@ use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
 use crate::state::LOCKUP_IDS;
-use crate::{msg::WithdrawAssets, state::ROUTER};
+use crate::state::ROUTER;
 
 use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
 
-pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<String>> {
+pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
@@ -47,22 +47,19 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
     let supported_offer_assets =
         router.query_supported_offer_assets(&deps.querier, &target_asset)?;
 
-    let mut depositable_assets: Vec<String> = vec![deposit_asset_info.to_string()];
+    let mut depositable_assets = vec![deposit_asset_info.clone()];
 
     // Get only native coins from supported offer assets
     for asset in supported_offer_assets {
-        if let AssetInfo::Native(denom) = asset {
-            depositable_assets.push(denom);
+        if let AssetInfo::Native(_) = &asset {
+            depositable_assets.push(asset);
         }
     }
 
     Ok(depositable_assets)
 }
 
-pub fn query_withdrawable_assets(
-    deps: Deps,
-    vault_address: Addr,
-) -> StdResult<Vec<WithdrawAssets>> {
+pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
@@ -77,8 +74,7 @@ pub fn query_withdrawable_assets(
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
 
     // Create withdrawable assets vec with first one being the withdraw asset
-    let mut withdrawable_assets: Vec<WithdrawAssets> =
-        vec![WithdrawAssets::Single(withdraw_asset_info.to_string())];
+    let mut withdrawable_assets = vec![withdraw_asset_info.clone()];
 
     let supported_ask_assets: Vec<AssetInfo> = match pool {
         Some(pool) => {
@@ -110,12 +106,7 @@ pub fn query_withdrawable_assets(
             }
 
             // Add the multi-token case where equal to the tokens in the pair
-            withdrawable_assets.push(WithdrawAssets::Multi(
-                pool_tokens
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>(),
-            ));
+            withdrawable_assets.extend(pool_tokens);
 
             supported_ask_assets
         }
@@ -127,8 +118,8 @@ pub fn query_withdrawable_assets(
 
     // Add all supported ask assets as single withdrawal options
     for ask_asset in supported_ask_assets {
-        if let AssetInfo::Native(denom) = ask_asset {
-            withdrawable_assets.push(WithdrawAssets::Single(denom));
+        if let AssetInfo::Native(_) = &ask_asset {
+            withdrawable_assets.push(ask_asset);
         }
     }
 

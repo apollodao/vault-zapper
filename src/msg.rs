@@ -22,7 +22,7 @@ pub enum ExecuteMsg {
     Withdraw {
         vault_address: String,
         recipient: Option<String>,
-        withdraw_assets: WithdrawAssets,
+        zap_to: ZapTo,
     },
     Unlock {
         vault_address: String,
@@ -31,7 +31,7 @@ pub enum ExecuteMsg {
         vault_address: String,
         lockup_id: u64,
         recipient: Option<String>,
-        withdraw_assets: WithdrawAssets,
+        zap_to: ZapTo,
     },
     Callback(CallbackMsg),
 }
@@ -71,13 +71,13 @@ impl CallbackMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    /// Returns Vec<Coin>. The user may deposit any amount of several of these.
-    #[returns(Vec<String>)]
+    /// Returns Vec<AssetInfo>. The user may deposit any amount of several of these.
+    #[returns(Vec<AssetInfo>)]
     DepositableAssets { vault_address: String },
 
-    /// Returns Vec<WithdrawableAsset>. The user may chose one of the options in
+    /// Returns Vec<AssetInfo>. The user may chose one of the options in
     /// this vec when calling Withdraw or WithdrawUnlocked.
-    #[returns(Vec<WithdrawAssets>)]
+    #[returns(Vec<AssetInfo>)]
     WithdrawableAssets { vault_address: String },
 
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these positions
@@ -93,18 +93,20 @@ pub enum QueryMsg {
 pub struct MigrateMsg {}
 
 #[cw_serde]
-pub enum WithdrawAssets {
-    Single(String),
-    Multi(Vec<String>),
+pub enum ZapTo {
+    /// Zap to asset
+    Asset(AssetInfo),
+    /// Zap to underlying LP assets
+    Underlying {},
 }
 
 #[test]
 pub fn test_withdrawable_asset() {
     //Example response for ATOM-OSMO pool
-    let _example_response: Vec<WithdrawAssets> = vec![
-        WithdrawAssets::Single("osmo".to_string()),
-        WithdrawAssets::Single("usdc".to_string()),
-        WithdrawAssets::Single("atom".to_string()),
-        WithdrawAssets::Multi(vec!["atom".to_string(), "osmo".to_string()]),
+    let _example_response: Vec<ZapTo> = vec![
+        ZapTo::Asset(AssetInfo::Native("osmo".to_string())),
+        ZapTo::Asset(AssetInfo::Native("usdc".to_string())),
+        ZapTo::Asset(AssetInfo::Native("atom".to_string())),
+        ZapTo::Underlying {},
     ];
 }
