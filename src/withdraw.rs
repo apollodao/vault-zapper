@@ -52,7 +52,7 @@ pub fn execute_withdraw(
                 },
                 info.funds.to_vec(),
             )?,
-            redeem_amount: Asset::new(vault_asset.clone(), amount_redeemed_from_vault),
+            redeem_asset: Asset::new(vault_asset.clone(), amount_redeemed_from_vault),
         })
     };
 
@@ -121,7 +121,7 @@ pub fn execute_withdraw_unlocked(
                 ),
                 vec![],
             )?,
-            redeem_amount: Asset::new(vault_asset.clone(), amount_redeemed_from_vault),
+            redeem_asset: Asset::new(vault_asset.clone(), amount_redeemed_from_vault),
         })
     };
 
@@ -165,7 +165,7 @@ where
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_asset).ok();
 
     // Create list of messages to return
-    let mut msgs = vec![];
+    let mut withdraw_msgs = vec![];
 
     // Check requested withdrawal assets
     match withdraw_assets {
@@ -173,18 +173,18 @@ where
             // If the requested denom is the same as the vaults withdrawal asset
             // just withdraw directly to the recipient.
             if requested_asset == vault_asset {
-                msgs.push(
+                withdraw_msgs.push(
                     get_withdraw_msg(vault_address.to_string(), Some(recipient.to_string()))?.msg,
                 );
-                return Ok(Response::new().add_messages(msgs));
+                return Ok(Response::new().add_messages(withdraw_msgs));
             } else {
                 // Add message to withdraw from vault, but return assets to this contract.
                 let withdraw = get_withdraw_msg(vault_address.to_string(), None)?;
-                msgs.push(withdraw.msg);
+                withdraw_msgs.push(withdraw.msg);
 
-                let mut response = Response::new().add_messages(msgs);
+                let mut response = Response::new().add_messages(withdraw_msgs);
 
-                let asset_withdrawn_from_vault = withdraw.redeem_amount.clone();
+                let asset_withdrawn_from_vault = withdraw.redeem_asset.clone();
 
                 // Check if the withdrawable asset is an LP token. If it is, add a message
                 // to withdraw liquidity first.
@@ -228,11 +228,20 @@ where
                 // Add message to withdraw asset from vault, withdraw liquidity,
                 // and return withdrawn assets to recipient.
                 let withdraw = get_withdraw_msg(vault_address.to_string(), None)?;
-                msgs.push(withdraw.msg);
-                let res = pool.withdraw_liquidity(deps.as_ref(), &env, withdraw.redeem_amount)?;
+                withdraw_msgs.push(withdraw.msg);
+                let assets_withdrawn_from_lp =
+                    pool.simulate_withdraw_liquidity(deps.as_ref(), &withdraw.redeem_asset);
+                let withdraw_liquidity_res =
+                    pool.withdraw_liquidity(deps.as_ref(), &env, withdraw.redeem_asset)?;
+                let send_to_recipient_msgs = assets_withdrawn_from_lp
+                    .iter()
+                    .map(|a| a.transfer_msgs(recipient.to_string()))
+                    .collect::<StdResult<Vec<_>>>()?
+                    .concat();
                 return Ok(merge_responses(vec![
-                    Response::new().add_messages(msgs),
-                    res,
+                    Response::new().add_messages(withdraw_msgs),
+                    withdraw_liquidity_res,
+                    Response::new().add_messages(send_to_recipient_msgs),
                 ]));
             } else {
                 return Err(ContractError::UnsupportedWithdrawal {});

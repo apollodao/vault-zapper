@@ -13,5 +13,5 @@ pub const TEMP_UNLOCK_CALLER: Item<Addr> = Item::new("temp_unlock_caller");
 
 pub struct WithdrawMsg {
     pub msg: WasmMsg,
-    pub redeem_amount: Asset,
+    pub redeem_asset: Asset,
 }
