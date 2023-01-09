@@ -199,12 +199,24 @@ where
                     response = merge_responses(vec![response, withdraw_liq_res]);
 
                     // Add messages to basket liquidate the assets withdrawn from the LP
-                    response = response.add_messages(router.basket_liquidate_msgs(
-                        assets_withdrawn_from_lp,
-                        &requested_asset,
-                        None,
-                        Some(recipient.to_string()),
-                    )?);
+                    response = response.add_messages(
+                        router.basket_liquidate_msgs(
+                            assets_withdrawn_from_lp
+                                .into_iter()
+                                .cloned()
+                                .filter(|a| a.info != requested_asset)
+                                .collect::<Vec<_>>()
+                                .into(),
+                            &requested_asset,
+                            None,
+                            Some(recipient.to_string()),
+                        )?,
+                    );
+
+                    // If one of the underlying LP assets is the requested asset, add a message to send it to the recipient
+                    if let Some(asset) = assets_withdrawn_from_lp.find(&requested_asset) {
+                        response = response.add_message(asset.transfer_msg(recipient)?);
+                    }
                 } else {
                     // Basket liquidate the assets withdrawn from the vault
                     response = response.add_messages(router.basket_liquidate_msgs(
