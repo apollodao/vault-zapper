@@ -1,17 +1,21 @@
 use cosmwasm_std::{
     wasm_execute, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
-use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
+use cosmwasm_vault_standard::extensions::lockup::{
+    LockupExecuteMsg, LockupQueryMsg, UnlockingPosition,
+};
 use cosmwasm_vault_standard::{
-    extensions::lockup::LockupExecuteMsg, ExtensionExecuteMsg, ExtensionQueryMsg,
-    VaultInfoResponse, VaultStandardExecuteMsg, VaultStandardQueryMsg,
+    ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
+    VaultStandardQueryMsg,
 };
 use cw_asset::{Asset, AssetInfo};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
+use crate::helpers::merge_responses;
+use crate::msg::ZapTo;
 use crate::state::{WithdrawMsg, LOCKUP_IDS, ROUTER};
-use crate::{helpers::merge_responses, msg::ZapTo, ContractError};
+use crate::ContractError;
 
 pub fn execute_withdraw(
     deps: DepsMut,
@@ -136,7 +140,8 @@ pub fn execute_withdraw_unlocked(
     )
 }
 
-// Called by execute_withdraw and execute_withdraw_unlocked to withdraw assets from the vault.
+// Called by execute_withdraw and execute_withdraw_unlocked to withdraw assets
+// from the vault.
 pub fn withdraw<F>(
     deps: DepsMut,
     env: Env,
@@ -213,7 +218,8 @@ where
                         )?,
                     );
 
-                    // If one of the underlying LP assets is the requested asset, add a message to send it to the recipient
+                    // If one of the underlying LP assets is the requested asset, add a message to
+                    // send it to the recipient
                     if let Some(asset) = assets_withdrawn_from_lp.find(&requested_asset) {
                         response = response.add_message(asset.transfer_msg(recipient)?);
                     }

@@ -46,8 +46,8 @@ pub(crate) fn merge_responses(responses: Vec<Response>) -> Response {
     merged
 }
 
-/// Struct that helps keep track of how much of each coin belongs to the contract
-/// and how much was sent by the caller.
+/// Struct that helps keep track of how much of each coin belongs to the
+/// contract and how much was sent by the caller.
 #[cw_serde]
 pub struct TokenBalances {
     /// The coins that belong to this contract
@@ -82,8 +82,8 @@ impl TokenBalances {
             .unwrap_or_default()
     }
 
-    /// Update the struct to add any newly received funds to the caller_balances.
-    /// Should be called in a CallbackMsg handler.
+    /// Update the struct to add any newly received funds to the
+    /// caller_balances. Should be called in a CallbackMsg handler.
     pub fn update_balances(&mut self, deps: Deps, env: &Env) -> StdResult<()> {
         let new_balances = Self::get_contract_balances_helper(deps, env, &self.contract_balances)?;
 

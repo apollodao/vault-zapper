@@ -3,16 +3,18 @@ use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
     WasmMsg,
 };
-use cosmwasm_vault_standard::VaultInfoResponse;
 use cosmwasm_vault_standard::{
-    ExtensionExecuteMsg, ExtensionQueryMsg, VaultStandardExecuteMsg, VaultStandardQueryMsg,
+    ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
+    VaultStandardQueryMsg,
 };
 use cw_asset::{Asset, AssetInfo, AssetList};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
 use crate::helpers::TokenBalances;
-use crate::{msg::CallbackMsg, state::ROUTER, ContractError};
+use crate::msg::CallbackMsg;
+use crate::state::ROUTER;
+use crate::ContractError;
 
 pub fn execute_deposit(
     deps: DepsMut,
@@ -58,7 +60,8 @@ pub fn execute_deposit(
     //Check if the depositable asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
 
-    //Set the target of the basket liquidation, depending on if depositable asset is an LP token or not
+    //Set the target of the basket liquidation, depending on if depositable asset
+    // is an LP token or not
     let receive_asset_infos = match &pool {
         Some(pool) => {
             // Get the assets in the pool
@@ -68,12 +71,14 @@ pub fn execute_deposit(
                 .collect()
         }
         None => {
-            //Not an LP token. Use the depositable_asset as the target for the basket liquidation
+            //Not an LP token. Use the depositable_asset as the target for the basket
+            // liquidation
             vec![deposit_asset_info.clone()]
         }
     };
 
-    // Get the amount of tokens sent by the caller and how much was already in the contract.
+    // Get the amount of tokens sent by the caller and how much was already in the
+    // contract.
     let token_balances = TokenBalances::new(deps.as_ref(), &env, &caller_funds)?;
 
     // Basket Liquidate deposited coins
@@ -95,7 +100,8 @@ pub fn execute_deposit(
         vec![]
     };
 
-    // If the depositable asset is an LP token, we add a message to provide liquidity for this pool
+    // If the depositable asset is an LP token, we add a message to provide
+    // liquidity for this pool
     if let Some(pool) = pool {
         msgs.push(
             CallbackMsg::ProvideLiquidity {
@@ -108,7 +114,8 @@ pub fn execute_deposit(
             .into_cosmos_msg(&env)?,
         )
     } else {
-        // If the depositable asset is not an LP token, we add a message to deposit the coins into the vault
+        // If the depositable asset is not an LP token, we add a message to deposit the
+        // coins into the vault
         msgs.push(
             CallbackMsg::Deposit {
                 vault_address,

@@ -3,8 +3,7 @@ use cw_asset::AssetInfo;
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
-use crate::state::LOCKUP_IDS;
-use crate::state::ROUTER;
+use crate::state::{LOCKUP_IDS, ROUTER};
 
 use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
@@ -34,8 +33,9 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
                 .map(|x| x.info.clone())
                 .collect();
 
-            // We just choose the first asset in the pool as the target for the basket liquidation.
-            // This could probably be optimized, but for now I think it's fine.
+            // We just choose the first asset in the pool as the target for the basket
+            // liquidation. This could probably be optimized, but for now I
+            // think it's fine.
             pool_tokens
                 .first()
                 .ok_or(StdError::generic_err("Unsupported vault"))?
