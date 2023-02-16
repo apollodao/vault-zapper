@@ -159,13 +159,13 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             let response = msg
                 .result
                 .into_result()
-                .map_err(|x| ContractError::Generic(x))?;
+                .map_err(ContractError::Generic)?;
 
             // Parse lockup ID from events
             let lockup_id: u64 = parse_attribute_value(
                 find_event(
                     &response,
-                    &format!("wasm-{}", UNLOCKING_POSITION_CREATED_EVENT_TYPE),
+                    &format!("wasm-{UNLOCKING_POSITION_CREATED_EVENT_TYPE}"),
                 )?,
                 UNLOCKING_POSITION_ATTR_KEY,
             )?;

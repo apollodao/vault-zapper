@@ -17,7 +17,7 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
 
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
+    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
 
     // Check if deposit asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
@@ -47,7 +47,7 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
     let supported_offer_assets =
         router.query_supported_offer_assets(&deps.querier, &target_asset)?;
 
-    let mut depositable_assets = vec![deposit_asset_info.clone()];
+    let mut depositable_assets = vec![deposit_asset_info];
 
     // Get only native coins from supported offer assets
     for asset in supported_offer_assets {
@@ -68,7 +68,7 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
 
-    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
+    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token);
 
     // Check if the withdrawn asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
@@ -97,11 +97,7 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
                 if supported_ask_assets.is_empty() {
                     supported_ask_assets = ask_assets;
                 } else {
-                    supported_ask_assets = supported_ask_assets
-                        .iter()
-                        .filter(|ask_asset| ask_assets.contains(ask_asset))
-                        .cloned()
-                        .collect();
+                    supported_ask_assets.retain(|ask_asset| ask_assets.contains(ask_asset));
                 }
             }
 
@@ -139,7 +135,7 @@ pub fn query_user_unlocking_positions(
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
             LockupQueryMsg::UnlockingPositions {
                 owner: env.contract.address.to_string(),
-                start_after: if user_lockup_ids.len() > 0 && user_lockup_ids[0] > 0 {
+                start_after: if !user_lockup_ids.is_empty() && user_lockup_ids[0] > 0 {
                     Some(user_lockup_ids[0] - 1)
                 } else {
                     None

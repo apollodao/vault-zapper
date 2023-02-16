@@ -31,7 +31,7 @@ pub fn execute_withdraw(
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
     let vault_token_denom = vault_info.vault_token;
-    let vault_asset = AssetInfo::Native(vault_info.base_token.to_string());
+    let vault_asset = AssetInfo::Native(vault_info.base_token);
 
     // Make sure vault token was sent
     if info.funds.len() != 1 || &info.funds[0].denom != &vault_token_denom {
@@ -88,8 +88,7 @@ pub fn execute_withdraw_unlocked(
     // Check if lockup ID is valid.
     if !lock_ids.contains(&lockup_id) {
         return Err(ContractError::Std(StdError::not_found(format!(
-            "lockup_id {}",
-            lockup_id
+            "lockup_id {lockup_id}"
         ))));
     }
 
@@ -102,7 +101,7 @@ pub fn execute_withdraw_unlocked(
         vault_address.to_string(),
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_asset = AssetInfo::Native(vault_info.base_token.to_string());
+    let vault_asset = AssetInfo::Native(vault_info.base_token);
 
     let unlocking_position: UnlockingPosition = deps.querier.query_wasm_smart(
         vault_address.clone(),
@@ -164,7 +163,7 @@ where
         vault_address.to_string(),
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_asset = AssetInfo::Native(vault_info.base_token.to_string());
+    let vault_asset = AssetInfo::Native(vault_info.base_token);
 
     // Check if withdrawal asset is an LP token.
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_asset).ok();
@@ -181,7 +180,7 @@ where
                 withdraw_msgs.push(
                     get_withdraw_msg(vault_address.to_string(), Some(recipient.to_string()))?.msg,
                 );
-                return Ok(Response::new().add_messages(withdraw_msgs));
+                Ok(Response::new().add_messages(withdraw_msgs))
             } else {
                 // Add message to withdraw from vault, but return assets to this contract.
                 let withdraw = get_withdraw_msg(vault_address.to_string(), None)?;
@@ -189,7 +188,7 @@ where
 
                 let mut response = Response::new().add_messages(withdraw_msgs);
 
-                let asset_withdrawn_from_vault = withdraw.redeem_asset.clone();
+                let asset_withdrawn_from_vault = withdraw.redeem_asset;
 
                 // Check if the withdrawable asset is an LP token. If it is, add a message
                 // to withdraw liquidity first.
@@ -233,7 +232,7 @@ where
                     )?);
                 }
 
-                return Ok(response);
+                Ok(response)
             }
         }
         ZapTo::Underlying {} => {
@@ -256,13 +255,13 @@ where
                     .map(|a| a.transfer_msgs(recipient.to_string()))
                     .collect::<StdResult<Vec<_>>>()?
                     .concat();
-                return Ok(merge_responses(vec![
+                Ok(merge_responses(vec![
                     Response::new().add_messages(withdraw_msgs),
                     withdraw_liquidity_res,
                     Response::new().add_messages(send_to_recipient_msgs),
-                ]));
+                ]))
             } else {
-                return Err(ContractError::UnsupportedWithdrawal {});
+                Err(ContractError::UnsupportedWithdrawal {})
             }
         }
     }

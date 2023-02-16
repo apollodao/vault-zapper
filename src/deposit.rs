@@ -38,7 +38,7 @@ pub fn execute_deposit(
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
 
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
+    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
@@ -94,7 +94,7 @@ pub fn execute_deposit(
         })
         .collect::<Vec<Coin>>();
     let receive_asset_info = receive_asset_infos[0].clone();
-    let mut msgs = if liquidate_coins.len() > 0 {
+    let mut msgs = if !liquidate_coins.is_empty() {
         router.basket_liquidate_msgs(liquidate_coins.into(), &receive_asset_info, None, None)?
     } else {
         vec![]
