@@ -1,15 +1,21 @@
+use apollo_utils::submessages::{find_event, parse_attribute_value};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+};
+use cosmwasm_vault_standard::extensions::lockup::{
+    UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
 use cw2::set_contract_version;
 
 use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
-use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::query::{query_depositable_assets, query_withdrawable_assets};
+use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::query::{
+    query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
+};
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
@@ -41,21 +47,26 @@ pub fn execute(
     let api = deps.api;
     match msg {
         ExecuteMsg::Deposit {
+            assets,
             vault_address,
             recipient,
             slippage_tolerance,
-        } => execute_deposit(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            recipient,
-            slippage_tolerance,
-        ),
+        } => {
+            let assets = assets.check(deps.api)?;
+            execute_deposit(
+                deps,
+                env,
+                info,
+                assets,
+                api.addr_validate(&vault_address)?,
+                recipient,
+                slippage_tolerance,
+            )
+        }
         ExecuteMsg::Withdraw {
             vault_address,
             recipient,
-            withdraw_assets,
+            zap_to: withdraw_assets,
         } => execute_withdraw(
             deps,
             env,
@@ -71,7 +82,7 @@ pub fn execute(
             vault_address,
             lockup_id,
             recipient,
-            withdraw_assets,
+            zap_to: withdraw_assets,
         } => execute_withdraw_unlocked(
             deps,
             env,
@@ -87,8 +98,6 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                receive_asset_info,
-                deposit_asset_info,
                 slippage_tolerance,
             } => callback_provide_liquidity(
                 deps,
@@ -98,8 +107,6 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                deposit_asset_info,
-                receive_asset_info,
                 slippage_tolerance,
             ),
             CallbackMsg::Deposit {
@@ -121,7 +128,7 @@ pub fn execute(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::DepositableAssets { vault_address } => to_binary(&query_depositable_assets(
             deps,
@@ -130,6 +137,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawableAssets { vault_address } => to_binary(&query_withdrawable_assets(
             deps,
             deps.api.addr_validate(&vault_address)?,
+        )?),
+        QueryMsg::UnlockingPositions {
+            vault_address,
+            owner,
+        } => to_binary(&query_user_unlocking_positions(
+            deps,
+            env,
+            deps.api.addr_validate(&vault_address)?,
+            deps.api.addr_validate(&owner)?,
         )?),
     }
 }
@@ -145,18 +161,22 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 .into_result()
                 .map_err(|x| ContractError::Generic(x))?;
 
-            // Parse lockup ID from data field
-            let lockup_id: u64 = from_binary(
-                &response
-                    .data
-                    .ok_or(ContractError::Generic("No data in reply".to_string()))?,
+            // Parse lockup ID from events
+            let lockup_id: u64 = parse_attribute_value(
+                find_event(
+                    &response,
+                    &format!("wasm-{}", UNLOCKING_POSITION_CREATED_EVENT_TYPE),
+                )?,
+                UNLOCKING_POSITION_ATTR_KEY,
             )?;
 
             // Read temporarily stored caller address
             let caller_addr = TEMP_UNLOCK_CALLER.load(deps.storage)?;
 
             //Read users lock Ids.
-            let mut lock_ids = LOCKUP_IDS.load(deps.storage, caller_addr.clone())?;
+            let mut lock_ids = LOCKUP_IDS
+                .load(deps.storage, caller_addr.clone())
+                .unwrap_or_default();
 
             lock_ids.push(lockup_id);
 
@@ -172,5 +192,7 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
     }
 }
 
-#[cfg(test)]
-mod tests {}
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    Ok(Response::default())
+}

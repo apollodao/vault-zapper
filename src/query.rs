@@ -1,32 +1,24 @@
-use cosmwasm_std::{Addr, Deps, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, Env, StdError, StdResult};
 use cw_asset::AssetInfo;
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
-use crate::{msg::WithdrawAssets, state::ROUTER};
+use crate::state::LOCKUP_IDS;
+use crate::state::ROUTER;
 
-use cosmos_vault_standard::msg::{ExtensionQueryMsg, QueryMsg as VaultQueryMsg, VaultInfo};
+use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
+use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
 
-pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<String>> {
+pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let depositable_assets: Vec<String> = vault_info
-        .deposit_coins
-        .iter()
-        .map(|x| x.denom.clone())
-        .collect();
 
-    // For now we only support vaults that have one deposit asset.
-    // TODO: Support vaults with multiple deposit assets.
-    if depositable_assets.len() != 1 {
-        return Err(StdError::generic_err("Unsupported vault"));
-    }
-    let deposit_asset_info = AssetInfo::Native(depositable_assets[0].clone());
+    let deposit_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
 
     // Check if deposit asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
@@ -55,48 +47,34 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
     let supported_offer_assets =
         router.query_supported_offer_assets(&deps.querier, &target_asset)?;
 
-    let mut depositable_assets: Vec<String> = vec![deposit_asset_info.to_string()];
+    let mut depositable_assets = vec![deposit_asset_info.clone()];
 
     // Get only native coins from supported offer assets
     for asset in supported_offer_assets {
-        if let AssetInfo::Native(denom) = asset {
-            depositable_assets.push(denom);
+        if let AssetInfo::Native(_) = &asset {
+            depositable_assets.push(asset);
         }
     }
 
     Ok(depositable_assets)
 }
 
-pub fn query_withdrawable_assets(
-    deps: Deps,
-    vault_address: Addr,
-) -> StdResult<Vec<WithdrawAssets>> {
+pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfo = deps.querier.query_wasm_smart(
+    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
         vault_address.to_string(),
-        &VaultQueryMsg::<ExtensionQueryMsg>::Info {},
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
-    let vault_assets: Vec<String> = vault_info
-        .deposit_coins
-        .iter()
-        .map(|x| x.denom.clone())
-        .collect();
 
-    // For now we only support vaults that have one deposit asset.
-    // TODO: Support vaults with multiple deposit assets.
-    if vault_assets.len() != 1 {
-        return Err(StdError::generic_err("Unsupported vault"));
-    }
-    let withdraw_asset_info = AssetInfo::Native(vault_assets[0].clone());
+    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token.to_string());
 
     // Check if the withdrawn asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
 
     // Create withdrawable assets vec with first one being the withdraw asset
-    let mut withdrawable_assets: Vec<WithdrawAssets> =
-        vec![WithdrawAssets::Single(withdraw_asset_info.to_string())];
+    let mut withdrawable_assets = vec![withdraw_asset_info.clone()];
 
     let supported_ask_assets: Vec<AssetInfo> = match pool {
         Some(pool) => {
@@ -128,12 +106,7 @@ pub fn query_withdrawable_assets(
             }
 
             // Add the multi-token case where equal to the tokens in the pair
-            withdrawable_assets.push(WithdrawAssets::Multi(
-                pool_tokens
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>(),
-            ));
+            withdrawable_assets.extend(pool_tokens);
 
             supported_ask_assets
         }
@@ -145,10 +118,36 @@ pub fn query_withdrawable_assets(
 
     // Add all supported ask assets as single withdrawal options
     for ask_asset in supported_ask_assets {
-        if let AssetInfo::Native(denom) = ask_asset {
-            withdrawable_assets.push(WithdrawAssets::Single(denom));
+        if let AssetInfo::Native(_) = &ask_asset {
+            withdrawable_assets.push(ask_asset);
         }
     }
 
     Ok(withdrawable_assets)
+}
+
+pub fn query_user_unlocking_positions(
+    deps: Deps,
+    env: Env,
+    vault_address: Addr,
+    user: Addr,
+) -> StdResult<Vec<UnlockingPosition>> {
+    let mut user_lockup_ids = LOCKUP_IDS.load(deps.storage, user).unwrap_or_default();
+    user_lockup_ids.sort();
+    let mut unlocking_positions: Vec<UnlockingPosition> = deps.querier.query_wasm_smart(
+        vault_address,
+        &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
+            LockupQueryMsg::UnlockingPositions {
+                owner: env.contract.address.to_string(),
+                start_after: if user_lockup_ids.len() > 0 && user_lockup_ids[0] > 0 {
+                    Some(user_lockup_ids[0] - 1)
+                } else {
+                    None
+                },
+                limit: None,
+            },
+        )),
+    )?;
+    unlocking_positions.retain(|p| user_lockup_ids.contains(&p.id));
+    Ok(unlocking_positions)
 }
