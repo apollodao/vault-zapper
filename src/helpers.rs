@@ -63,10 +63,9 @@ impl TokenBalances {
 
         // Deduct the received funds from the current balances
         for asset in caller_funds {
-            contract_balances
-                .iter_mut()
-                .find(|c| c.info == asset.info)
-                .map(|c| c.amount -= asset.amount);
+            if let Some(c) = contract_balances.iter_mut().find(|c| c.info == asset.info) {
+                c.amount -= asset.amount;
+            };
         }
 
         Ok(Self {
@@ -100,10 +99,9 @@ impl TokenBalances {
             let difference = asset.amount.checked_sub(old_balance)?;
             if difference > Uint128::zero() {
                 let mut caller_balances = self.caller_balances.to_vec();
-                caller_balances
-                    .iter_mut()
-                    .find(|a| a.info == asset.info)
-                    .map(|a| a.amount += difference);
+                if let Some(a) = caller_balances.iter_mut().find(|a| a.info == asset.info) {
+                    a.amount += difference;
+                };
                 self.caller_balances = caller_balances.into();
             }
         }

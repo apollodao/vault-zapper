@@ -32,7 +32,7 @@ pub fn execute_withdraw(
     let vault_asset = AssetInfo::Native(vault_info.base_token);
 
     // Make sure vault token was sent
-    if info.funds.len() != 1 || &info.funds[0].denom != &vault_token_denom {
+    if info.funds.len() != 1 || info.funds[0].denom != vault_token_denom {
         return Err(ContractError::InvalidVaultToken {});
     }
     let vault_token = info.funds[0].clone();

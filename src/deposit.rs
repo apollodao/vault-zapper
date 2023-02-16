@@ -42,7 +42,7 @@ pub fn execute_deposit(
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if caller_funds.len() == 1 && &caller_funds.to_vec()[0].info == &deposit_asset_info {
+    if caller_funds.len() == 1 && caller_funds.to_vec()[0].info == deposit_asset_info {
         let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
             funds: caller_funds
@@ -130,6 +130,7 @@ pub fn execute_deposit(
     Ok(receive_assets_res.add_messages(msgs))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn callback_provide_liquidity(
     deps: DepsMut,
     env: Env,
