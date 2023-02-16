@@ -2,8 +2,8 @@ use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, ReplyOn, Response, SubMsg,
     WasmMsg,
 };
-use cosmwasm_vault_standard::extensions::lockup::LockupExecuteMsg;
-use cosmwasm_vault_standard::{
+use cw_vault_standard::extensions::lockup::LockupExecuteMsg;
+use cw_vault_standard::{
     ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
     VaultStandardQueryMsg,
 };

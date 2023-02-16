@@ -1,6 +1,6 @@
+use apollo_cw_asset::{AssetInfo, AssetListUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
-use cw_asset::{AssetInfo, AssetListUnchecked};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 
@@ -85,7 +85,7 @@ pub enum QueryMsg {
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these
     /// positions if they have finished unlocking by calling
     /// WithdrawUnlocked.
-    #[returns(Vec<cosmwasm_vault_standard::extensions::lockup::UnlockingPosition>)]
+    #[returns(Vec<cw_vault_standard::extensions::lockup::UnlockingPosition>)]
     UnlockingPositions {
         vault_address: String,
         owner: String,

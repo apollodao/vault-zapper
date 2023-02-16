@@ -1,12 +1,12 @@
+use apollo_cw_asset::AssetInfo;
 use cosmwasm_std::{Addr, Deps, Env, StdError, StdResult};
-use cw_asset::AssetInfo;
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
 use crate::state::{LOCKUP_IDS, ROUTER};
 
-use cosmwasm_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
-use cosmwasm_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
+use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
+use cw_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;

@@ -2,8 +2,8 @@ use cosmwasm_schema::cw_serde;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Deps, Env, Response, StdResult, Uint128, WasmMsg};
-use cw_asset::{Asset, AssetInfo, AssetList};
 
 use crate::msg::ExecuteMsg;
 

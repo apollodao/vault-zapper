@@ -1,5 +1,5 @@
+use apollo_cw_asset::Asset;
 use cosmwasm_std::{Addr, WasmMsg};
-use cw_asset::Asset;
 use cw_dex_router::helpers::CwDexRouter;
 use cw_storage_plus::{Item, Map};
 

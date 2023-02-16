@@ -1,16 +1,14 @@
+use apollo_cw_asset::{Asset, AssetInfo};
 use cosmwasm_std::{
     wasm_execute, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
-use cosmwasm_vault_standard::extensions::lockup::{
-    LockupExecuteMsg, LockupQueryMsg, UnlockingPosition,
-};
-use cosmwasm_vault_standard::{
+use cw_dex::traits::Pool as PoolTrait;
+use cw_dex::Pool;
+use cw_vault_standard::extensions::lockup::{LockupExecuteMsg, LockupQueryMsg, UnlockingPosition};
+use cw_vault_standard::{
     ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
     VaultStandardQueryMsg,
 };
-use cw_asset::{Asset, AssetInfo};
-use cw_dex::traits::Pool as PoolTrait;
-use cw_dex::Pool;
 
 use crate::helpers::merge_responses;
 use crate::msg::ZapTo;

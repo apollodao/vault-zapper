@@ -1,15 +1,15 @@
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
     WasmMsg,
 };
-use cosmwasm_vault_standard::{
+use cw_dex::traits::Pool as PoolTrait;
+use cw_dex::Pool;
+use cw_vault_standard::{
     ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
     VaultStandardQueryMsg,
 };
-use cw_asset::{Asset, AssetInfo, AssetList};
-use cw_dex::traits::Pool as PoolTrait;
-use cw_dex::Pool;
 
 use crate::helpers::TokenBalances;
 use crate::msg::CallbackMsg;
