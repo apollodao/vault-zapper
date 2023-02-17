@@ -38,7 +38,7 @@ pub fn execute_deposit(
         &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
     )?;
 
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
+    let deposit_asset_info = AssetInfo::from_str(deps.api, &vault_info.base_token);
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
