@@ -59,7 +59,7 @@ pub struct TokenBalances {
 impl TokenBalances {
     pub fn new(deps: Deps, env: &Env, caller_funds: &AssetList) -> StdResult<Self> {
         let mut contract_balances =
-            Self::get_contract_balances_helper(deps, env, caller_funds)?.to_vec();
+            caller_funds.query_balances(&deps.querier, &env.contract.address)?;
 
         // Deduct the received funds from the current balances
         for asset in caller_funds {
@@ -84,7 +84,9 @@ impl TokenBalances {
     /// Update the struct to add any newly received funds to the
     /// caller_balances. Should be called in a CallbackMsg handler.
     pub fn update_balances(&mut self, deps: Deps, env: &Env) -> StdResult<()> {
-        let new_balances = Self::get_contract_balances_helper(deps, env, &self.contract_balances)?;
+        let new_balances = self
+            .contract_balances
+            .query_balances(&deps.querier, &env.contract.address)?;
 
         // For every coin in new_balances:
         // Calculate the difference between the new balance and the old balance.
@@ -107,49 +109,5 @@ impl TokenBalances {
         }
 
         Ok(())
-    }
-
-    fn get_contract_balances_helper(
-        deps: Deps,
-        env: &Env,
-        assets_to_query: &AssetList,
-    ) -> StdResult<AssetList> {
-        // get all native token balances on contract
-        let mut contract_balances: AssetList = deps
-            .querier
-            .query_all_balances(env.contract.address.to_string())?
-            .into();
-        let contract_assets: Vec<AssetInfo> = contract_balances
-            .into_iter()
-            .map(|c| c.info.to_owned())
-            .collect();
-        // if provided, query balances for assets not included in above queried balances
-        // should only be cw20s
-        if assets_to_query.len() > 0 {
-            let other_contract_balances = assets_to_query
-                .into_iter()
-                .filter_map(|a| {
-                    if matches!(a.info, AssetInfo::Cw20(_)) && !contract_assets.contains(&a.info) {
-                        let contract_balance: Uint128 = deps
-                            .querier
-                            .query_wasm_smart(
-                                a.info.to_string(),
-                                &cw20::Cw20QueryMsg::Balance {
-                                    address: env.contract.address.to_string(),
-                                },
-                            )
-                            .unwrap_or_default();
-                        Some(Asset {
-                            info: a.info.to_owned(),
-                            amount: contract_balance,
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<Asset>>();
-            contract_balances.add_many(&other_contract_balances.into())?;
-        }
-        Ok(contract_balances)
     }
 }
