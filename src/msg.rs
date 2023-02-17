@@ -1,6 +1,6 @@
+use apollo_cw_asset::{AssetInfo, AssetListUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
-use cw_asset::{AssetInfo, AssetListUnchecked};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 
@@ -45,7 +45,8 @@ pub enum CallbackMsg {
         recipient: Addr,
         /// The pool to provide liquidity to
         pool: Pool,
-        /// The coin balances of the contract and the coins received by the caller
+        /// The coin balances of the contract and the coins received by the
+        /// caller
         coin_balances: TokenBalances,
         /// An optional slippage tolerance to use when providing liquidity
         slippage_tolerance: Option<Decimal>,
@@ -71,7 +72,8 @@ impl CallbackMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    /// Returns Vec<AssetInfo>. The user may deposit any amount of several of these.
+    /// Returns Vec<AssetInfo>. The user may deposit any amount of several of
+    /// these.
     #[returns(Vec<AssetInfo>)]
     DepositableAssets { vault_address: String },
 
@@ -80,9 +82,10 @@ pub enum QueryMsg {
     #[returns(Vec<AssetInfo>)]
     WithdrawableAssets { vault_address: String },
 
-    /// Returns Vec<UnlockingPosition>. The user may withdraw from these positions
-    /// if they have finished unlocking by calling WithdrawUnlocked.
-    #[returns(Vec<cosmwasm_vault_standard::extensions::lockup::UnlockingPosition>)]
+    /// Returns Vec<UnlockingPosition>. The user may withdraw from these
+    /// positions if they have finished unlocking by calling
+    /// WithdrawUnlocked.
+    #[returns(Vec<cw_vault_standard::extensions::lockup::UnlockingPosition>)]
     UnlockingPositions {
         vault_address: String,
         owner: String,

@@ -4,10 +4,10 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
 };
-use cosmwasm_vault_standard::extensions::lockup::{
+use cw2::set_contract_version;
+use cw_vault_standard::extensions::lockup::{
     UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
-use cw2::set_contract_version;
 
 use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
 use crate::error::ContractError;
@@ -156,16 +156,13 @@ pub const UNLOCK_REPLY_ID: u64 = 0u64;
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
     match msg.id {
         UNLOCK_REPLY_ID => {
-            let response = msg
-                .result
-                .into_result()
-                .map_err(|x| ContractError::Generic(x))?;
+            let response = msg.result.into_result().map_err(ContractError::Generic)?;
 
             // Parse lockup ID from events
             let lockup_id: u64 = parse_attribute_value(
                 find_event(
                     &response,
-                    &format!("wasm-{}", UNLOCKING_POSITION_CREATED_EVENT_TYPE),
+                    &format!("wasm-{UNLOCKING_POSITION_CREATED_EVENT_TYPE}"),
                 )?,
                 UNLOCKING_POSITION_ATTR_KEY,
             )?;

@@ -2,8 +2,8 @@ use cosmwasm_schema::cw_serde;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Deps, Env, Response, StdResult, Uint128, WasmMsg};
-use cw_asset::{Asset, AssetInfo, AssetList};
 
 use crate::msg::ExecuteMsg;
 
@@ -46,8 +46,8 @@ pub(crate) fn merge_responses(responses: Vec<Response>) -> Response {
     merged
 }
 
-/// Struct that helps keep track of how much of each coin belongs to the contract
-/// and how much was sent by the caller.
+/// Struct that helps keep track of how much of each coin belongs to the
+/// contract and how much was sent by the caller.
 #[cw_serde]
 pub struct TokenBalances {
     /// The coins that belong to this contract
@@ -63,10 +63,9 @@ impl TokenBalances {
 
         // Deduct the received funds from the current balances
         for asset in caller_funds {
-            contract_balances
-                .iter_mut()
-                .find(|c| c.info == asset.info)
-                .map(|c| c.amount -= asset.amount);
+            if let Some(c) = contract_balances.iter_mut().find(|c| c.info == asset.info) {
+                c.amount -= asset.amount;
+            };
         }
 
         Ok(Self {
@@ -82,8 +81,8 @@ impl TokenBalances {
             .unwrap_or_default()
     }
 
-    /// Update the struct to add any newly received funds to the caller_balances.
-    /// Should be called in a CallbackMsg handler.
+    /// Update the struct to add any newly received funds to the
+    /// caller_balances. Should be called in a CallbackMsg handler.
     pub fn update_balances(&mut self, deps: Deps, env: &Env) -> StdResult<()> {
         let new_balances = Self::get_contract_balances_helper(deps, env, &self.contract_balances)?;
 
@@ -100,10 +99,9 @@ impl TokenBalances {
             let difference = asset.amount.checked_sub(old_balance)?;
             if difference > Uint128::zero() {
                 let mut caller_balances = self.caller_balances.to_vec();
-                caller_balances
-                    .iter_mut()
-                    .find(|a| a.info == asset.info)
-                    .map(|a| a.amount += difference);
+                if let Some(a) = caller_balances.iter_mut().find(|a| a.info == asset.info) {
+                    a.amount += difference;
+                };
                 self.caller_balances = caller_balances.into();
             }
         }

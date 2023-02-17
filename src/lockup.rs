@@ -2,10 +2,10 @@ use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, ReplyOn, Response, SubMsg,
     WasmMsg,
 };
-use cosmwasm_vault_standard::extensions::lockup::LockupExecuteMsg;
-use cosmwasm_vault_standard::VaultInfoResponse;
-use cosmwasm_vault_standard::{
-    ExtensionExecuteMsg, ExtensionQueryMsg, VaultStandardExecuteMsg, VaultStandardQueryMsg,
+use cw_vault_standard::extensions::lockup::LockupExecuteMsg;
+use cw_vault_standard::{
+    ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
+    VaultStandardQueryMsg,
 };
 
 use crate::contract::UNLOCK_REPLY_ID;
@@ -44,10 +44,12 @@ pub fn execute_unlock(
         )?,
     });
 
-    // Temporarily store the caller's address so we can read it in the reply entrypoint
+    // Temporarily store the caller's address so we can read it in the reply
+    // entrypoint
     TEMP_UNLOCK_CALLER.save(deps.storage, &info.sender)?;
 
-    // We must add the unlock message as a submessage and parse the Lock ID in the reply entrypoint.
+    // We must add the unlock message as a submessage and parse the Lock ID in the
+    // reply entrypoint.
     Ok(Response::new().add_submessage(SubMsg {
         gas_limit: None,
         id: UNLOCK_REPLY_ID,
