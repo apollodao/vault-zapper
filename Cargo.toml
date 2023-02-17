@@ -47,11 +47,11 @@ cosmwasm/rust-optimizer-arm64:0.12.11
 
 [dependencies]
 apollo-utils = "0.1.0"
-cosmwasm-schema = "1.1"
-cosmwasm-std = "1.1"
-cw-storage-plus = "0.16"
-cw2 = "0.16"
-cw20 = "0.16"
+cosmwasm-schema = "1.2.1"
+cosmwasm-std = "1.2.1"
+cw-storage-plus = "1.0.1"
+cw2 = "1.0.1"
+cw20 = "1.0.1"
 schemars = "0.8.11"
 serde = {version = "1.0.152", default-features = false, features = ["derive"]}
 thiserror = { version = "1.0.31" }
