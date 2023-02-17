@@ -2,8 +2,8 @@ use cosmwasm_schema::cw_serde;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use apollo_cw_asset::{Asset, AssetInfo, AssetList};
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Deps, Env, Response, StdResult, Uint128, WasmMsg};
+use apollo_cw_asset::{AssetInfo, AssetList};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Deps, Env, StdResult, Uint128, WasmMsg};
 
 use crate::msg::ExecuteMsg;
 
@@ -26,24 +26,6 @@ impl CwTemplateContract {
         }
         .into())
     }
-}
-
-/// Merge several Response objects into one. Currently ignores the data fields.
-pub(crate) fn merge_responses(responses: Vec<Response>) -> Response {
-    let mut merged = Response::default();
-    for response in responses {
-        merged = merged
-            .add_attributes(response.attributes)
-            .add_events(response.events)
-            .add_messages(
-                response
-                    .messages
-                    .iter()
-                    .map(|m| m.msg.clone())
-                    .collect::<Vec<_>>(),
-            );
-    }
-    merged
 }
 
 /// Struct that helps keep track of how much of each coin belongs to the

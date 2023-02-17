@@ -1,4 +1,8 @@
+use crate::msg::ZapTo;
+use crate::state::{WithdrawMsg, LOCKUP_IDS, ROUTER};
+use crate::ContractError;
 use apollo_cw_asset::{Asset, AssetInfo};
+use apollo_utils::responses::merge_responses;
 use cosmwasm_std::{
     wasm_execute, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
@@ -9,11 +13,6 @@ use cw_vault_standard::{
     ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
     VaultStandardQueryMsg,
 };
-
-use crate::helpers::merge_responses;
-use crate::msg::ZapTo;
-use crate::state::{WithdrawMsg, LOCKUP_IDS, ROUTER};
-use crate::ContractError;
 
 pub fn execute_withdraw(
     deps: DepsMut,
