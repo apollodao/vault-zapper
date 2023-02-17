@@ -43,9 +43,13 @@ impl TokenBalances {
         let mut contract_balances =
             caller_funds.query_balances(&deps.querier, &env.contract.address)?;
 
-        // Deduct the received funds from the current balances
+        // Deduct the received native funds from the current balances
+        // We only do this for native coins, since CW20's are not yet received
         for asset in caller_funds {
-            if let Some(c) = contract_balances.iter_mut().find(|c| c.info == asset.info) {
+            if let Some(c) = contract_balances
+                .iter_mut()
+                .find(|c| c.info == asset.info && c.info.is_native())
+            {
                 c.amount -= asset.amount;
             };
         }
@@ -66,30 +70,15 @@ impl TokenBalances {
     /// Update the struct to add any newly received funds to the
     /// caller_balances. Should be called in a CallbackMsg handler.
     pub fn update_balances(&mut self, deps: Deps, env: &Env) -> StdResult<()> {
-        let new_balances = self
+        let mut new_balances = self
             .contract_balances
             .query_balances(&deps.querier, &env.contract.address)?;
 
-        // For every coin in new_balances:
-        // Calculate the difference between the new balance and the old balance.
-        // Add the difference to the caller_balance.
-        for asset in &new_balances {
-            let old_balance = self
-                .caller_balances
-                .find(&asset.info)
-                .map(|a| a.amount)
-                .unwrap_or_default();
-
-            let difference = asset.amount.checked_sub(old_balance)?;
-            if difference > Uint128::zero() {
-                let mut caller_balances = self.caller_balances.to_vec();
-                if let Some(a) = caller_balances.iter_mut().find(|a| a.info == asset.info) {
-                    a.amount += difference;
-                };
-                self.caller_balances = caller_balances.into();
-            }
-        }
-
+        // Any new funds received by the contract should be added to the
+        // caller_balances. So we can simply deduct the contract balances from
+        // the new current balances.
+        new_balances.deduct_many(&self.contract_balances)?;
+        self.caller_balances = new_balances;
         Ok(())
     }
 }
