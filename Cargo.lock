@@ -34,9 +34,9 @@ dependencies = [
 
 [[package]]
 name = "apollo-utils"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5343de733207c65516e001c36c1490c2e8cdd0cdcdd4a2d001f2f22fe93e5ef"
+checksum = "4b05ef4d29df7a8d2459008f09ba1c9f1f0aa7ac1bdfaa510029c0cf6921c2c2"
 dependencies = [
  "apollo-cw-asset",
  "cosmwasm-schema",

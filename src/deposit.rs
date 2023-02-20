@@ -1,5 +1,5 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
-use apollo_utils::assets::receive_assets;
+use apollo_utils::assets::{increase_allowance_msgs, receive_assets};
 use cosmwasm_std::{
     to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
     WasmMsg,
@@ -42,19 +42,22 @@ pub fn execute_deposit(
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if caller_funds.len() == 1 && caller_funds.to_vec()[0].info == deposit_asset_info {
+    if caller_funds.len() == 1 && &caller_funds.to_vec()[0].info == &deposit_asset_info {
+        //Increase allowance if the asset is a CW20 token
+        let (allowance_msgs, funds) =
+            increase_allowance_msgs(&env, &caller_funds, vault_address.clone())?;
+
         let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
-            funds: caller_funds
-                .into_iter()
-                .filter_map(|a| a.try_into().ok())
-                .collect(),
+            funds,
             msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
                 amount: caller_funds.to_vec()[0].amount,
                 recipient: Some(recipient.to_string()),
             })?,
         });
-        return Ok(Response::new().add_message(deposit_msg));
+        return Ok(receive_assets_res
+            .add_messages(allowance_msgs)
+            .add_message(deposit_msg));
     }
 
     //Check if the depositable asset is an LP token
@@ -187,19 +190,24 @@ pub fn callback_provide_liquidity(
         .get_caller_balance(&lp_tokens_received.info)
         .checked_add(lp_tokens_received.amount)?;
 
+    // Increase allowance for Cw20 tokens
+    let deposit_assets =
+        AssetList::from(vec![Asset::new(lp_tokens_received.info, amount_to_deposit)]);
+    let (allowance_msgs, funds) =
+        increase_allowance_msgs(&env, &deposit_assets, vault_address.clone())?;
+
     // Deposit the coins into the vault
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
-        funds: vec![Coin {
-            denom: lp_tokens_received.info.to_string(),
-            amount: amount_to_deposit,
-        }],
+        funds,
         msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
             amount: amount_to_deposit,
             recipient: Some(recipient.to_string()),
         })?,
     });
-    response = response.add_message(deposit_msg);
+    response = response
+        .add_messages(allowance_msgs)
+        .add_message(deposit_msg);
 
     Ok(response)
 }
@@ -221,19 +229,24 @@ pub fn callback_deposit(
     // Update the coin balances
     coin_balances.update_balances(deps.as_ref(), &env)?;
 
-    // Deposit the coins into the vault
     let caller_balance = coin_balances.get_caller_balance(&deposit_asset_info);
+
+    // Increase allowance for Cw20 tokens
+    let deposit_assets = AssetList::from(vec![Asset::new(deposit_asset_info, caller_balance)]);
+    let (allowance_msgs, funds) =
+        increase_allowance_msgs(&env, &deposit_assets, vault_address.clone())?;
+
+    // Deposit the coins into the vault
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
-        funds: vec![Coin {
-            denom: deposit_asset_info.to_string(),
-            amount: caller_balance,
-        }],
+        funds: funds,
         msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
             amount: caller_balance,
             recipient: Some(recipient.to_string()),
         })?,
     });
 
-    Ok(Response::new().add_message(deposit_msg))
+    Ok(Response::new()
+        .add_messages(allowance_msgs)
+        .add_message(deposit_msg))
 }
