@@ -97,7 +97,7 @@ pub fn execute(
                 vault_address,
                 recipient,
                 pool,
-                coin_balances,
+                token_balances,
                 min_out,
             } => callback_provide_liquidity(
                 deps,
@@ -106,13 +106,13 @@ pub fn execute(
                 vault_address,
                 recipient,
                 pool,
-                coin_balances,
+                token_balances,
                 min_out,
             ),
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
-                coin_balances,
+                token_balances,
                 deposit_asset_info,
                 min_out,
             } => callback_deposit(
@@ -121,7 +121,7 @@ pub fn execute(
                 info,
                 vault_address,
                 recipient,
-                coin_balances,
+                token_balances,
                 deposit_asset_info,
                 min_out,
             ),

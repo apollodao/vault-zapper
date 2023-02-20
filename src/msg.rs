@@ -48,14 +48,14 @@ pub enum CallbackMsg {
         pool: Pool,
         /// The coin balances of the contract and the coins received by the
         /// caller
-        coin_balances: TokenBalances,
+        token_balances: TokenBalances,
         /// The minimum number of vault tokens to receive
         min_out: Uint128,
     },
     Deposit {
         vault_address: Addr,
         recipient: Addr,
-        coin_balances: TokenBalances,
+        token_balances: TokenBalances,
         deposit_asset_info: AssetInfo,
         /// The minimum number of vault tokens to receive
         min_out: Uint128,

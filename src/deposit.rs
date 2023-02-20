@@ -122,7 +122,7 @@ pub fn execute_deposit(
                 vault_address,
                 recipient,
                 pool,
-                coin_balances: token_balances,
+                token_balances,
                 min_out,
             }
             .into_cosmos_msg(&env)?,
@@ -134,7 +134,7 @@ pub fn execute_deposit(
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
-                coin_balances: token_balances,
+                token_balances,
                 deposit_asset_info,
                 min_out,
             }
@@ -153,7 +153,7 @@ pub fn callback_provide_liquidity(
     vault_address: Addr,
     recipient: Addr,
     pool: Pool,
-    mut coin_balances: TokenBalances,
+    mut token_balances: TokenBalances,
     min_out: Uint128,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
@@ -162,7 +162,7 @@ pub fn callback_provide_liquidity(
     }
 
     // Update coin balances
-    coin_balances.update_balances(deps.as_ref(), &env)?;
+    token_balances.update_balances(deps.as_ref(), &env)?;
 
     // Provide liquidity with all assets returned from the basket liquidation
     // and any that the caller sent with the original message.
@@ -170,7 +170,7 @@ pub fn callback_provide_liquidity(
         .get_pool_liquidity(deps.as_ref())?
         .into_iter()
         .filter_map(|a| {
-            let balance = coin_balances.get_caller_balance(&a.info);
+            let balance = token_balances.get_caller_balance(&a.info);
             if balance > Uint128::zero() {
                 Some(Asset::new(a.info.clone(), balance))
             } else {
@@ -208,7 +208,7 @@ pub fn callback_provide_liquidity(
 
     // Deposit any LP tokens the caller sent with the original message plus those
     // received from this liquidity provision.
-    let amount_to_deposit = coin_balances
+    let amount_to_deposit = token_balances
         .get_caller_balance(&lp_tokens_received.info)
         .checked_add(lp_tokens_received.amount)?;
 
@@ -240,7 +240,7 @@ pub fn callback_deposit(
     info: MessageInfo,
     vault_address: Addr,
     recipient: Addr,
-    mut coin_balances: TokenBalances,
+    mut token_balances: TokenBalances,
     deposit_asset_info: AssetInfo,
     min_out: Uint128,
 ) -> Result<Response, ContractError> {
@@ -250,9 +250,9 @@ pub fn callback_deposit(
     }
 
     // Update the coin balances
-    coin_balances.update_balances(deps.as_ref(), &env)?;
+    token_balances.update_balances(deps.as_ref(), &env)?;
 
-    let deposit_amount = coin_balances.get_caller_balance(&deposit_asset_info);
+    let deposit_amount = token_balances.get_caller_balance(&deposit_asset_info);
 
     // Check that the minimum amount of vault tokens will be received
     let vault_tokens_received = deps.querier.query_wasm_smart::<Uint128>(
