@@ -73,18 +73,26 @@ pub fn execute_deposit(
 
     //Set the target of the basket liquidation, depending on if depositable asset
     // is an LP token or not
-    let receive_asset_infos = match &pool {
+    let receive_asset_info = match &pool {
         Some(pool) => {
             // Get the assets in the pool
-            pool.get_pool_liquidity(deps.as_ref())?
+            let pool_tokens: Vec<AssetInfo> = pool
+                .get_pool_liquidity(deps.as_ref())?
                 .into_iter()
                 .map(|x| x.info.clone())
-                .collect()
+                .collect();
+
+            // We just choose the first asset in the pool as the target for the basket liquidation.
+            // This could probably be optimized, but for now I think it's fine.
+            pool_tokens
+                .first()
+                .ok_or(ContractError::UnsupportedVault {})?
+                .clone()
         }
         None => {
             //Not an LP token. Use the depositable_asset as the target for the basket
             // liquidation
-            vec![deposit_asset_info.clone()]
+            deposit_asset_info.clone()
         }
     };
 
@@ -97,12 +105,11 @@ pub fn execute_deposit(
     let liquidate_coins: AssetList = caller_funds
         .to_vec()
         .into_iter()
-        .filter(|a| !receive_asset_infos.contains(&a.info))
+        .filter(|a| &receive_asset_info != &a.info)
         .collect::<Vec<Asset>>()
         .into();
-    let receive_asset_info = receive_asset_infos[0].clone();
     let mut msgs = if !liquidate_coins.len() == 0 {
-        router.basket_liquidate_msgs(liquidate_coins.into(), &receive_asset_info, None, None)?
+        router.basket_liquidate_msgs(liquidate_coins, &receive_asset_info, None, None)?
     } else {
         vec![]
     };
