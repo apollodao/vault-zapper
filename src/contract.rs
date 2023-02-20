@@ -50,7 +50,7 @@ pub fn execute(
             assets,
             vault_address,
             recipient,
-            slippage_tolerance,
+            min_out,
         } => {
             let assets = assets.check(deps.api)?;
             execute_deposit(
@@ -60,7 +60,7 @@ pub fn execute(
                 assets,
                 api.addr_validate(&vault_address)?,
                 recipient,
-                slippage_tolerance,
+                min_out,
             )
         }
         ExecuteMsg::Withdraw {
@@ -98,7 +98,7 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                slippage_tolerance,
+                min_out,
             } => callback_provide_liquidity(
                 deps,
                 env,
@@ -107,13 +107,14 @@ pub fn execute(
                 recipient,
                 pool,
                 coin_balances,
-                slippage_tolerance,
+                min_out,
             ),
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
                 coin_balances,
                 deposit_asset_info,
+                min_out,
             } => callback_deposit(
                 deps,
                 env,
@@ -122,6 +123,7 @@ pub fn execute(
                 recipient,
                 coin_balances,
                 deposit_asset_info,
+                min_out,
             ),
         },
     }

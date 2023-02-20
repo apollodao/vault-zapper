@@ -1,4 +1,4 @@
-use cosmwasm_std::{OverflowError, StdError};
+use cosmwasm_std::{OverflowError, StdError, Uint128};
 use cw_dex::CwDexError;
 use thiserror::Error;
 
@@ -27,4 +27,12 @@ pub enum ContractError {
 
     #[error("Invalid vault token sent")]
     InvalidVaultToken {},
+
+    #[error(
+        "Did not receive minimum number of vault tokens. Expected {expected}, received {received}"
+    )]
+    MinOutNotReceived {
+        expected: Uint128,
+        received: Uint128,
+    },
 }

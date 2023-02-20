@@ -1,8 +1,7 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::{increase_allowance_msgs, receive_assets};
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
-    WasmMsg,
+    to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, Response, Uint128, WasmMsg,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
@@ -23,7 +22,7 @@ pub fn execute_deposit(
     caller_funds: AssetList,
     vault_address: Addr,
     recipient: Option<String>,
-    slippage_tolerance: Option<Decimal>,
+    min_out: Uint128,
 ) -> Result<Response, ContractError> {
     // Unwrap recipient or use sender
     let recipient = recipient.map_or(Ok(info.sender.clone()), |x| deps.api.addr_validate(&x))?;
@@ -47,11 +46,20 @@ pub fn execute_deposit(
         let (allowance_msgs, funds) =
             increase_allowance_msgs(&env, &caller_funds, vault_address.clone())?;
 
+        // Check if the amount sent is greater than the minimum amount
+        let amount = caller_funds.to_vec()[0].amount;
+        if amount < min_out {
+            return Err(ContractError::MinOutNotReceived {
+                expected: min_out,
+                received: amount,
+            });
+        }
+
         let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
             funds,
             msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-                amount: caller_funds.to_vec()[0].amount,
+                amount,
                 recipient: Some(recipient.to_string()),
             })?,
         });
@@ -61,7 +69,7 @@ pub fn execute_deposit(
     }
 
     //Check if the depositable asset is an LP token
-    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
+    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok(); //TODO: Must update this fn to support Astroport
 
     //Set the target of the basket liquidation, depending on if depositable asset
     // is an LP token or not
@@ -86,18 +94,14 @@ pub fn execute_deposit(
 
     // Basket Liquidate deposited coins
     // We only liquidate the coins that are not already the target asset
-    let liquidate_coins = caller_funds
+    let liquidate_coins: AssetList = caller_funds
+        .to_vec()
         .into_iter()
-        .filter_map(|a| {
-            if !receive_asset_infos.contains(&a.info) {
-                a.try_into().ok()
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<Coin>>();
+        .filter(|a| !receive_asset_infos.contains(&a.info))
+        .collect::<Vec<Asset>>()
+        .into();
     let receive_asset_info = receive_asset_infos[0].clone();
-    let mut msgs = if !liquidate_coins.is_empty() {
+    let mut msgs = if !liquidate_coins.len() == 0 {
         router.basket_liquidate_msgs(liquidate_coins.into(), &receive_asset_info, None, None)?
     } else {
         vec![]
@@ -112,19 +116,20 @@ pub fn execute_deposit(
                 recipient,
                 pool,
                 coin_balances: token_balances,
-                slippage_tolerance,
+                min_out,
             }
             .into_cosmos_msg(&env)?,
         )
     } else {
         // If the depositable asset is not an LP token, we add a message to deposit the
-        // coins into the vault
+        // asset into the vault
         msgs.push(
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
                 coin_balances: token_balances,
                 deposit_asset_info,
+                min_out,
             }
             .into_cosmos_msg(&env)?,
         );
@@ -142,7 +147,7 @@ pub fn callback_provide_liquidity(
     recipient: Addr,
     pool: Pool,
     mut coin_balances: TokenBalances,
-    slippage_tolerance: Option<Decimal>,
+    min_out: Uint128,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
     if info.sender != env.contract.address {
@@ -177,12 +182,22 @@ pub fn callback_provide_liquidity(
         deps.as_ref(),
         &env,
         provide_liquidity_assets,
-        if let Some(slippage_tolerance) = slippage_tolerance {
-            lp_tokens_received.amount * (Decimal::one() - slippage_tolerance)
-        } else {
-            lp_tokens_received.amount
+        Uint128::one(),
+    )?;
+
+    // Query how many vault tokens would be received from depositing the LP tokens
+    let vault_tokens_received = deps.querier.query_wasm_smart::<Uint128>(
+        &vault_address,
+        &VaultStandardQueryMsg::<Empty>::ConvertToShares {
+            amount: lp_tokens_received.amount,
         },
     )?;
+    if vault_tokens_received < min_out {
+        return Err(ContractError::MinOutNotReceived {
+            expected: min_out,
+            received: vault_tokens_received,
+        });
+    }
 
     // Deposit any LP tokens the caller sent with the original message plus those
     // received from this liquidity provision.
@@ -220,6 +235,7 @@ pub fn callback_deposit(
     recipient: Addr,
     mut coin_balances: TokenBalances,
     deposit_asset_info: AssetInfo,
+    min_out: Uint128,
 ) -> Result<Response, ContractError> {
     // Can only be called by self
     if info.sender != env.contract.address {
@@ -229,10 +245,24 @@ pub fn callback_deposit(
     // Update the coin balances
     coin_balances.update_balances(deps.as_ref(), &env)?;
 
-    let caller_balance = coin_balances.get_caller_balance(&deposit_asset_info);
+    let deposit_amount = coin_balances.get_caller_balance(&deposit_asset_info);
+
+    // Check that the minimum amount of vault tokens will be received
+    let vault_tokens_received = deps.querier.query_wasm_smart::<Uint128>(
+        &vault_address,
+        &VaultStandardQueryMsg::<Empty>::ConvertToShares {
+            amount: deposit_amount,
+        },
+    )?;
+    if vault_tokens_received < min_out {
+        return Err(ContractError::MinOutNotReceived {
+            expected: min_out,
+            received: vault_tokens_received,
+        });
+    }
 
     // Increase allowance for Cw20 tokens
-    let deposit_assets = AssetList::from(vec![Asset::new(deposit_asset_info, caller_balance)]);
+    let deposit_assets = AssetList::from(vec![Asset::new(deposit_asset_info, deposit_amount)]);
     let (allowance_msgs, funds) =
         increase_allowance_msgs(&env, &deposit_assets, vault_address.clone())?;
 
@@ -241,7 +271,7 @@ pub fn callback_deposit(
         contract_addr: vault_address.to_string(),
         funds: funds,
         msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-            amount: caller_balance,
+            amount: deposit_amount,
             recipient: Some(recipient.to_string()),
         })?,
     });

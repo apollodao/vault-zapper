@@ -1,6 +1,6 @@
 use apollo_cw_asset::{AssetInfo, AssetListUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 
@@ -17,7 +17,8 @@ pub enum ExecuteMsg {
         assets: AssetListUnchecked,
         vault_address: String,
         recipient: Option<String>,
-        slippage_tolerance: Option<Decimal>,
+        /// The minimum number of vault tokens to receive
+        min_out: Uint128,
     },
     Withdraw {
         vault_address: String,
@@ -48,14 +49,16 @@ pub enum CallbackMsg {
         /// The coin balances of the contract and the coins received by the
         /// caller
         coin_balances: TokenBalances,
-        /// An optional slippage tolerance to use when providing liquidity
-        slippage_tolerance: Option<Decimal>,
+        /// The minimum number of vault tokens to receive
+        min_out: Uint128,
     },
     Deposit {
         vault_address: Addr,
         recipient: Addr,
         coin_balances: TokenBalances,
         deposit_asset_info: AssetInfo,
+        /// The minimum number of vault tokens to receive
+        min_out: Uint128,
     },
 }
 
