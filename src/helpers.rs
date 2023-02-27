@@ -2,7 +2,7 @@ use cosmwasm_schema::cw_serde;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use apollo_cw_asset::{AssetInfo, AssetList};
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Deps, Env, StdResult, Uint128, WasmMsg};
 
 use crate::msg::ExecuteMsg;
@@ -53,9 +53,15 @@ impl TokenBalances {
                 c.amount -= asset.amount;
             };
         }
+        contract_balances.purge();
+
+        deps.api.debug(&format!(
+            "TokenBalances::new(). contract_balances: {:?}, caller_funds: {:?}",
+            contract_balances, caller_funds
+        ));
 
         Ok(Self {
-            contract_balances: contract_balances.into(),
+            contract_balances,
             caller_balances: caller_funds.clone(),
         })
     }
@@ -69,10 +75,31 @@ impl TokenBalances {
 
     /// Update the struct to add any newly received funds to the
     /// caller_balances. Should be called in a CallbackMsg handler.
-    pub fn update_balances(&mut self, deps: Deps, env: &Env) -> StdResult<()> {
-        let mut new_balances = self
-            .contract_balances
-            .query_balances(&deps.querier, &env.contract.address)?;
+    /// The assets parameter should contain the assets that might have changed.
+    pub fn update_balances(
+        &mut self,
+        deps: Deps,
+        env: &Env,
+        assets: &Vec<AssetInfo>,
+    ) -> StdResult<()> {
+        // let mut new_balances = self
+        //     .contract_balances
+        //     .query_balances(&deps.querier, &env.contract.address)?;
+        let mut new_balances: AssetList = assets
+            .into_iter()
+            .map(|a| {
+                let amount = a
+                    .query_balance(&deps.querier, &env.contract.address)
+                    .unwrap_or_default();
+                Asset::new(a.clone(), amount)
+            })
+            .collect::<Vec<_>>()
+            .into();
+
+        deps.api.debug(&format!(
+            "update_balances. new_balances: {:?}, contract_balances: {:?}",
+            new_balances, self.contract_balances
+        ));
 
         // Any new funds received by the contract should be added to the
         // caller_balances. So we can simply deduct the contract balances from

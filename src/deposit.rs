@@ -82,8 +82,9 @@ pub fn execute_deposit(
                 .map(|x| x.info.clone())
                 .collect();
 
-            // We just choose the first asset in the pool as the target for the basket liquidation.
-            // This could probably be optimized, but for now I think it's fine.
+            // We just choose the first asset in the pool as the target for the basket
+            // liquidation. This could probably be optimized, but for now I
+            // think it's fine.
             pool_tokens
                 .first()
                 .ok_or(ContractError::UnsupportedVault {})?
@@ -108,7 +109,9 @@ pub fn execute_deposit(
         .filter(|a| &receive_asset_info != &a.info)
         .collect::<Vec<Asset>>()
         .into();
-    let mut msgs = if !liquidate_coins.len() == 0 {
+    deps.api
+        .debug(&format!("Liquidate coins: {:?}", liquidate_coins));
+    let mut msgs = if liquidate_coins.len() != 0 {
         router.basket_liquidate_msgs(liquidate_coins, &receive_asset_info, None, None)?
     } else {
         vec![]
@@ -142,6 +145,10 @@ pub fn execute_deposit(
         );
     }
 
+    for msg in msgs.iter() {
+        deps.api.debug(&format!("Msg: {:?}", msg));
+    }
+
     Ok(receive_assets_res.add_messages(msgs))
 }
 
@@ -156,23 +163,26 @@ pub fn callback_provide_liquidity(
     mut token_balances: TokenBalances,
     min_out: Uint128,
 ) -> Result<Response, ContractError> {
+    deps.api
+        .debug(&format!("Vault Zapper Callback: Provide Liquidity"));
     // Can only be called by self
     if info.sender != env.contract.address {
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update coin balances
-    token_balances.update_balances(deps.as_ref(), &env)?;
+    let pool_assets = pool.pool_assets(deps.as_ref())?;
+
+    // Update caller's token balances
+    token_balances.update_balances(deps.as_ref(), &env, &pool_assets)?;
 
     // Provide liquidity with all assets returned from the basket liquidation
     // and any that the caller sent with the original message.
-    let provide_liquidity_assets: AssetList = pool
-        .get_pool_liquidity(deps.as_ref())?
+    let provide_liquidity_assets: AssetList = pool_assets
         .into_iter()
         .filter_map(|a| {
-            let balance = token_balances.get_caller_balance(&a.info);
+            let balance = token_balances.get_caller_balance(&a);
             if balance > Uint128::zero() {
-                Some(Asset::new(a.info.clone(), balance))
+                Some(Asset::new(a.clone(), balance))
             } else {
                 None
             }
@@ -180,9 +190,17 @@ pub fn callback_provide_liquidity(
         .collect::<Vec<Asset>>()
         .into();
 
+    deps.api.debug(&format!(
+        "Provide liquidity assets: {:?}",
+        provide_liquidity_assets
+    ));
+
     // Simulate providing liquidity
     let lp_tokens_received =
         pool.simulate_provide_liquidity(deps.as_ref(), &env, provide_liquidity_assets.clone())?;
+
+    deps.api
+        .debug(&format!("LP tokens received: {:?}", lp_tokens_received));
 
     // Provide liquidity to the pool
     let mut response = pool.provide_liquidity(
@@ -249,8 +267,8 @@ pub fn callback_deposit(
         return Err(ContractError::Unauthorized {});
     }
 
-    // Update the coin balances
-    token_balances.update_balances(deps.as_ref(), &env)?;
+    // Update the caller's token balances
+    token_balances.update_balances(deps.as_ref(), &env, &vec![deposit_asset_info.clone()])?;
 
     let deposit_amount = token_balances.get_caller_balance(&deposit_asset_info);
 
@@ -276,7 +294,7 @@ pub fn callback_deposit(
     // Deposit the coins into the vault
     let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
-        funds: funds,
+        funds,
         msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
             amount: deposit_amount,
             recipient: Some(recipient.to_string()),
