@@ -61,8 +61,8 @@ cw-dex = "0.1.1"
 
 [dev-dependencies]
 osmosis-test-tube = { git = "https://github.com/apollodao/test-tube.git", rev = "d2245dfed56329d8c2e84d109a5a01f29d0db0e8" }
-# cw-it = { git = "https://github.com/apollodao/cw-it", rev = "d25173ec9f009132594f57d29fa832dc10e68579", features = ["osmosis"] }
-cw-it = { path = "../cw-it", features = ["osmosis"] }
+cw-it = { git = "https://github.com/apollodao/cw-it", rev = "59299395d74480f0a419ccafe4eeba95323fcb86", features = ["osmosis"] }
+# cw-it = { path = "../cw-it", features = ["osmosis"] }
 test-case = "3.0.0"
 cw-dex = { version = "0.1.1", features = ["osmosis"] }
 liquidity-helper = "0.1.0"
@@ -70,3 +70,4 @@ proptest = "1.1.0"
 proptest-derive = "0.3.0"
 cw20 = "1.0.1"
 cw20-base = {version = "1.0.1", features = ["library"]}
+osmosis-vault-test-helpers = { path = "../osmosis-vault/packages/test-helpers" }
