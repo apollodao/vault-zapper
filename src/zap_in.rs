@@ -15,7 +15,7 @@ use crate::msg::CallbackMsg;
 use crate::state::ROUTER;
 use crate::ContractError;
 
-pub fn execute_deposit(
+pub fn execute_zap_in(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -71,10 +71,14 @@ pub fn execute_deposit(
     //Check if the depositable asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok(); //TODO: Must update this fn to support Astroport
 
-    //Set the target of the basket liquidation, depending on if depositable asset
+    // Set the target of the basket liquidation, depending on if depositable asset
     // is an LP token or not
+    deps.api
+        .debug(&format!("Depositable asset: {deposit_asset_info}"));
     let receive_asset_info = match &pool {
         Some(pool) => {
+            deps.api.debug(&format!("Depositable asset is an LP token"));
+
             // Get the assets in the pool
             let pool_tokens: Vec<AssetInfo> = pool
                 .get_pool_liquidity(deps.as_ref())?
@@ -91,6 +95,8 @@ pub fn execute_deposit(
                 .clone()
         }
         None => {
+            deps.api.debug("Depositable asset is not an LP token");
+
             //Not an LP token. Use the depositable_asset as the target for the basket
             // liquidation
             deposit_asset_info.clone()

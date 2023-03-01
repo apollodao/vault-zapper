@@ -13,26 +13,23 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    Deposit {
+    ZapIn {
         assets: AssetListUnchecked,
         vault_address: String,
         recipient: Option<String>,
         /// The minimum number of vault tokens to receive
         min_out: Uint128,
     },
-    Withdraw {
+    /// Withdraws the specified amount of the specified asset a vault.
+    ZapOut {
+        /// The vault to withdraw from
         vault_address: String,
+        /// The amount of the asset to withdraw
+        amount: Uint128,
+        /// The asset to withdraw
+        zap_to: AssetInfo,
+        /// The recipient of the withdrawn asset
         recipient: Option<String>,
-        zap_to: ZapTo,
-    },
-    Unlock {
-        vault_address: String,
-    },
-    WithdrawUnlocked {
-        vault_address: String,
-        lockup_id: u64,
-        recipient: Option<String>,
-        zap_to: ZapTo,
     },
     Callback(CallbackMsg),
 }

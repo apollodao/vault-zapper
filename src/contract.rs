@@ -9,7 +9,7 @@ use cw_vault_standard::extensions::lockup::{
     UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
 
-use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
+use crate::zap_in::{callback_deposit, callback_provide_liquidity, execute_zap_in};
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
@@ -18,6 +18,7 @@ use crate::query::{
 };
 use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
+use crate::zap_out::execute_zap_out;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -46,14 +47,14 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     let api = deps.api;
     match msg {
-        ExecuteMsg::Deposit {
+        ExecuteMsg::ZapIn {
             assets,
             vault_address,
             recipient,
             min_out,
         } => {
             let assets = assets.check(deps.api)?;
-            execute_deposit(
+            execute_zap_in(
                 deps,
                 env,
                 info,
@@ -63,34 +64,19 @@ pub fn execute(
                 min_out,
             )
         }
-        ExecuteMsg::Withdraw {
+        ExecuteMsg::ZapOut {
             vault_address,
+            amount,
+            zap_to,
             recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw(
+        } => execute_zap_out(
             deps,
             env,
             info,
             api.addr_validate(&vault_address)?,
-            recipient,
-            withdraw_assets,
-        ),
-        ExecuteMsg::Unlock { vault_address } => {
-            execute_unlock(deps, env, info, api.addr_validate(&vault_address)?)
-        }
-        ExecuteMsg::WithdrawUnlocked {
-            vault_address,
-            lockup_id,
-            recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw_unlocked(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            lockup_id,
-            recipient,
-            withdraw_assets,
+            amount,
+            zap_to,
+            recipient.map(|r| api.addr_validate(&r)).transpose()?,
         ),
         ExecuteMsg::Callback(msg) => match msg {
             CallbackMsg::ProvideLiquidity {
