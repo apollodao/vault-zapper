@@ -1,4 +1,4 @@
-use apollo_cw_asset::{Asset, AssetInfo};
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use cosmwasm_std::{
     wasm_execute, Addr, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
@@ -196,8 +196,12 @@ where
                         .simulate_withdraw_liquidity(deps.as_ref(), &asset_withdrawn_from_vault)?;
 
                     // Add messages to withdraw liquidity
-                    let withdraw_liq_res =
-                        pool.withdraw_liquidity(deps.as_ref(), &env, asset_withdrawn_from_vault)?;
+                    let withdraw_liq_res = pool.withdraw_liquidity(
+                        deps.as_ref(),
+                        &env,
+                        asset_withdrawn_from_vault,
+                        AssetList::new(), // TODO: Add min amount
+                    )?;
                     response = merge_responses(vec![response, withdraw_liq_res]);
 
                     // Add messages to basket liquidate the assets withdrawn from the LP
@@ -246,8 +250,12 @@ where
                 withdraw_msgs.push(withdraw.msg);
                 let assets_withdrawn_from_lp =
                     pool.simulate_withdraw_liquidity(deps.as_ref(), &withdraw.redeem_asset);
-                let withdraw_liquidity_res =
-                    pool.withdraw_liquidity(deps.as_ref(), &env, withdraw.redeem_asset)?;
+                let withdraw_liquidity_res = pool.withdraw_liquidity(
+                    deps.as_ref(),
+                    &env,
+                    withdraw.redeem_asset,
+                    AssetList::new(), // TODO: Add min amount
+                )?;
                 let send_to_recipient_msgs = assets_withdrawn_from_lp
                     .iter()
                     .map(|a| a.transfer_msgs(recipient.to_string()))

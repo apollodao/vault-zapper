@@ -46,16 +46,14 @@ cosmwasm/rust-optimizer-arm64:0.12.11
 """
 
 [dependencies]
-apollo-utils = "0.1.0"
-cosmwasm-schema = "1.2.1"
-cosmwasm-std = "1.2.1"
-cw-storage-plus = "1.0.1"
-cw2 = "1.0.1"
-cw20 = "1.0.1"
-schemars = "0.8.11"
-serde = {version = "1.0.152", default-features = false, features = ["derive"]}
-thiserror = { version = "1.0.31" }
-cw-vault-standard = { version = "0.2.0", features = ["lockup"] }
+apollo-utils = "0.1.1"
+cosmwasm-schema = "1.4.0"
+cosmwasm-std = "1.4.0"
+cw-storage-plus = "1.1.0"
+cw2 = "1.1.0"
+cw20 = "1.1.0"
+thiserror = { version = "1.0.48" }
+cw-vault-standard = { version = "0.3.2", features = ["lockup"] }
 cw-dex-router = { version = "0.1.0", features = ["library"] }
-apollo-cw-asset = "0.1.0"
-cw-dex = "0.1.1"
+apollo-cw-asset = "0.1.2"
+cw-dex = "0.3.1"
