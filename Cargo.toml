@@ -32,6 +32,7 @@ default = []
 library = []
 osmosis = ["cw-dex/osmosis"]
 astroport = ["cw-dex/astroport"]
+osmosis-test-tube = ["cw-it/osmosis-test-tube"]
 
 [package.metadata.scripts]
 optimize = """docker run --rm -v "$(pwd)":/code \
@@ -53,7 +54,16 @@ cw-storage-plus = "1.1.0"
 cw2 = "1.1.0"
 cw20 = "1.1.0"
 thiserror = { version = "1.0.48" }
-cw-vault-standard = { version = "0.3.2", features = ["lockup"] }
+cw-vault-standard = { version = "0.3.3-rc.1", features = ["lockup"] }
 cw-dex-router = { version = "0.1.0", features = ["library"] }
 apollo-cw-asset = "0.1.2"
-cw-dex = "0.3.1"
+cw-dex = "0.4.0-rc.2"
+liquidity-helper = "0.1.0"
+
+[dev-dependencies]
+cw-it = { version = "0.2.0-rc.4", features = ["astroport-multi-test"] }
+# cw-vault-standard-test-helpers = "0.3.3-rc.3"
+cw-vault-standard-test-helpers = { path = "../cw-vault-standard/test-helpers" }
+# locked-astroport-vault-test-helpers = "0.1.0-rc.2"
+locked-astroport-vault-test-helpers = { path = "../locked-astroport-vault/test-helpers" }
+astroport-liquidity-helper          = "0.2.0"

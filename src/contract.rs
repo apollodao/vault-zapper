@@ -9,14 +9,16 @@ use cw_vault_standard::extensions::lockup::{
     UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
 
-use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
+use crate::deposit::{
+    callback_deposit, callback_enforce_min_out, callback_provide_liquidity, execute_deposit,
+};
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::{
     query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
 };
-use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
+use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
 
 // version info for migration info
@@ -33,6 +35,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     ROUTER.save(deps.storage, &msg.router.check(deps.api)?)?;
+    LIQUIDITY_HELPER.save(deps.storage, &msg.liquidity_helper.check(deps.api)?)?;
 
     Ok(Response::default())
 }
@@ -50,7 +53,7 @@ pub fn execute(
             assets,
             vault_address,
             recipient,
-            slippage_tolerance,
+            min_out,
         } => {
             let assets = assets.check(deps.api)?;
             execute_deposit(
@@ -60,7 +63,7 @@ pub fn execute(
                 assets,
                 api.addr_validate(&vault_address)?,
                 recipient,
-                slippage_tolerance,
+                min_out,
             )
         }
         ExecuteMsg::Withdraw {
@@ -92,38 +95,55 @@ pub fn execute(
             recipient,
             withdraw_assets,
         ),
-        ExecuteMsg::Callback(msg) => match msg {
-            CallbackMsg::ProvideLiquidity {
-                vault_address,
-                recipient,
-                pool,
-                coin_balances,
-                slippage_tolerance,
-            } => callback_provide_liquidity(
-                deps,
-                env,
-                info,
-                vault_address,
-                recipient,
-                pool,
-                coin_balances,
-                slippage_tolerance,
-            ),
-            CallbackMsg::Deposit {
-                vault_address,
-                recipient,
-                coin_balances,
-                deposit_asset_info,
-            } => callback_deposit(
-                deps,
-                env,
-                info,
-                vault_address,
-                recipient,
-                coin_balances,
-                deposit_asset_info,
-            ),
-        },
+        ExecuteMsg::Callback(msg) => {
+            // Can only be called by self
+            if info.sender != env.contract.address {
+                return Err(ContractError::Unauthorized {});
+            }
+
+            match msg {
+                CallbackMsg::ProvideLiquidity {
+                    vault_address,
+                    recipient,
+                    pool,
+                    deposit_asset_info,
+                } => callback_provide_liquidity(
+                    deps,
+                    env,
+                    info,
+                    vault_address,
+                    recipient,
+                    pool,
+                    deposit_asset_info,
+                ),
+                CallbackMsg::Deposit {
+                    vault_address,
+                    recipient,
+                    deposit_asset_info,
+                } => callback_deposit(
+                    deps,
+                    env,
+                    info,
+                    vault_address,
+                    recipient,
+                    deposit_asset_info,
+                ),
+                CallbackMsg::EnforceMinOut {
+                    asset,
+                    recipient,
+                    balance_before,
+                    min_out,
+                } => callback_enforce_min_out(
+                    deps,
+                    env,
+                    info,
+                    asset,
+                    recipient,
+                    balance_before,
+                    min_out,
+                ),
+            }
+        }
     }
 }
 

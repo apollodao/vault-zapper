@@ -1,23 +1,28 @@
 use apollo_cw_asset::{AssetInfo, AssetListUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
-
-use crate::helpers::TokenBalances;
+use liquidity_helper::LiquidityHelperUnchecked;
 
 #[cw_serde]
 pub struct InstantiateMsg {
     pub router: CwDexRouterUnchecked,
+    pub liquidity_helper: LiquidityHelperUnchecked,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
     Deposit {
+        /// The assets to deposit
         assets: AssetListUnchecked,
+        /// The address of the vault to deposit into
         vault_address: String,
+        /// The recipient of the vault tokens
         recipient: Option<String>,
-        slippage_tolerance: Option<Decimal>,
+        /// The minimum amount of vault tokens to receive. If the amount of
+        /// vault tokens received is less than this, the transaction will fail.
+        min_out: Uint128,
     },
     Withdraw {
         vault_address: String,
@@ -38,6 +43,7 @@ pub enum ExecuteMsg {
 
 #[cw_serde]
 pub enum CallbackMsg {
+    /// Provide liquidity to a pool
     ProvideLiquidity {
         /// The vaults address
         vault_address: Addr,
@@ -45,17 +51,26 @@ pub enum CallbackMsg {
         recipient: Addr,
         /// The pool to provide liquidity to
         pool: Pool,
-        /// The coin balances of the contract and the coins received by the
-        /// caller
-        coin_balances: TokenBalances,
-        /// An optional slippage tolerance to use when providing liquidity
-        slippage_tolerance: Option<Decimal>,
+        /// The asset info of the vault's deposit asset
+        deposit_asset_info: AssetInfo,
     },
+    /// Performs the actual deposit into the vault
     Deposit {
         vault_address: Addr,
         recipient: Addr,
-        coin_balances: TokenBalances,
         deposit_asset_info: AssetInfo,
+    },
+    /// Enforce that the minimum amount of vault tokens are received
+    EnforceMinOut {
+        /// The asset to check the balance of
+        asset: AssetInfo,
+        /// The address to check the balance of
+        recipient: Addr,
+        /// The recipient's balance of `asset` before the transaction
+        balance_before: Uint128,
+        /// The minimum amount of `asset` to receive. If the amount of
+        /// `asset` received is less than this, the transaction will fail.
+        min_out: Uint128,
     },
 }
 
