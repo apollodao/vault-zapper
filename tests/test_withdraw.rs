@@ -14,7 +14,7 @@ pub mod common;
 fn redeem_base_token() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     // Deposit the LP token of the vault
     let balance = robot.query_base_token_balance(admin.address());
@@ -47,7 +47,7 @@ fn redeem_base_token() {
 fn redeem_one_asset_in_pool() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let deposit_asset_info = robot.deps.pool_assets[0].clone();
     let balance_before =
@@ -93,7 +93,7 @@ fn redeem_one_asset_in_pool() {
 fn redeem_asset_not_in_pool() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset = AssetInfo::native("uastro");
     let pool_assets = &robot.deps.pool_assets;
@@ -133,7 +133,7 @@ fn redeem_asset_not_in_pool() {
 fn redeem_both_assets_of_pool() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset1 = robot.deps.pool_assets[0].clone();
     let asset1_balance = robot.query_asset_balance(&asset1.clone().into(), &admin.address());
@@ -182,4 +182,96 @@ fn redeem_both_assets_of_pool() {
         .assert_vault_token_balance_eq(admin.address(), 0u128)
         .assert_asset_balance_approx_eq(asset1, &admin.address(), asset1_balance, max_rel_diff)
         .assert_asset_balance_approx_eq(asset2, &admin.address(), asset2_balance, max_rel_diff);
+}
+
+#[test]
+fn withdraw_unlocked_base_token() {
+    let owned_runner: OwnedTestRunner = common::get_test_runner();
+    let runner = owned_runner.as_ref();
+    let lock_duration = 300; // 5 minutes
+    let (robot, admin) = setup(&runner, lock_duration);
+
+    // Deposit the LP token of the vault
+    let balance = robot.query_base_token_balance(admin.address());
+    let deposit_amount = Uint128::new(1000000);
+    let deposit_asset_info = robot.deps.vault_pool.lp_token();
+    let deposit_asset = Asset::new(deposit_asset_info.clone(), deposit_amount);
+
+    let zap_to = ZapTo::Single(deposit_asset_info);
+
+    robot
+        .zapper_deposit(
+            vec![deposit_asset].into(),
+            None,
+            Uint128::one(),
+            Unwrap::Ok,
+            &admin,
+        )
+        .assert_vault_token_balance_gt(admin.address(), 0u128)
+        .assert_base_token_balance_eq(admin.address(), balance - deposit_amount)
+        .zapper_unlock_all(&admin)
+        .zapper_withdraw_unlocked(
+            0,
+            None,
+            zap_to.clone(),
+            AssetList::new(),
+            Unwrap::Err("Claim has not yet matured"),
+            &admin,
+        )
+        .increase_time(lock_duration)
+        .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin)
+        .assert_vault_token_balance_eq(admin.address(), 0u128)
+        .assert_base_token_balance_eq(admin.address(), balance);
+}
+
+#[test]
+fn withdraw_unlocked_one_asset_in_pool() {
+    let owned_runner: OwnedTestRunner = common::get_test_runner();
+    let runner = owned_runner.as_ref();
+    let lock_duration = 300; // 5 minutes
+    let (robot, admin) = setup(&runner, lock_duration);
+
+    let deposit_asset_info = robot.deps.pool_assets[0].clone();
+    let balance_before =
+        robot.query_asset_balance(&deposit_asset_info.clone().into(), &admin.address());
+    let deposit_amount = Uint128::new(1000000);
+    let deposit_asset = Asset::new(deposit_asset_info.clone(), deposit_amount);
+    assert!(balance_before > deposit_amount);
+
+    // Deposit
+    robot
+        .zapper_deposit(
+            vec![deposit_asset].into(),
+            None,
+            Uint128::one(),
+            Unwrap::Ok,
+            &admin,
+        )
+        .assert_vault_token_balance_gt(admin.address(), 0u128)
+        .assert_asset_balance_eq(
+            &deposit_asset_info.clone().into(),
+            &admin.address(),
+            balance_before - deposit_amount,
+        );
+
+    // Unlock and Withdraw Unlocked
+    let zap_to = ZapTo::Single(deposit_asset_info.clone());
+    let deposit_asset_balance_after = robot
+        .zapper_unlock_all(&admin)
+        .zapper_withdraw_unlocked(
+            0,
+            None,
+            zap_to.clone(),
+            AssetList::new(),
+            Unwrap::Err("Claim has not yet matured"),
+            &admin,
+        )
+        .increase_time(lock_duration)
+        .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin)
+        .assert_vault_token_balance_eq(admin.address(), 0u128)
+        .query_asset_balance(&deposit_asset_info.into(), &admin.address());
+
+    // Assert that approx 0.3% was lost due to swap fees
+    let balance_diff = balance_before - deposit_asset_balance_after;
+    assert!(Decimal::from_ratio(balance_diff, deposit_amount) < Decimal::permille(4));
 }

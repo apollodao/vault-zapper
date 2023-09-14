@@ -13,7 +13,7 @@ pub mod common;
 fn deposit_lp_token_works() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     // Deposit the LP token of the vault
     let balance = robot.query_base_token_balance(admin.address());
@@ -36,7 +36,7 @@ fn deposit_lp_token_works() {
 fn deposit_one_asset_of_pool_works() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset = robot.deps.pool_assets[0].clone();
     let balance = robot.query_asset_balance(&asset.clone().into(), &admin.address());
@@ -59,7 +59,7 @@ fn deposit_one_asset_of_pool_works() {
 fn deposit_both_assets_of_pool_works() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset1 = robot.deps.pool_assets[0].clone();
     let asset1_balance = robot.query_asset_balance(&asset1.clone().into(), &admin.address());
@@ -99,7 +99,7 @@ fn deposit_both_assets_of_pool_works() {
 fn deposit_asset_not_in_pool() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset = AssetInfo::native("uastro");
     let pool_assets = &robot.deps.pool_assets;
@@ -124,7 +124,7 @@ fn deposit_asset_not_in_pool() {
 fn deposit_lp_min_out_respected() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     // Deposit the LP token of the vault
     let balance = robot.query_base_token_balance(admin.address());
@@ -154,7 +154,7 @@ fn deposit_lp_min_out_respected() {
 fn deposit_one_asset_of_pool_min_out_respected() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
-    let (robot, admin) = setup(&runner);
+    let (robot, admin) = setup(&runner, 0);
 
     let asset = robot.deps.pool_assets[0].clone();
     let balance = robot.query_asset_balance(&asset.clone().into(), &admin.address());

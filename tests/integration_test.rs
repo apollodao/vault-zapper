@@ -6,5 +6,5 @@ pub mod common;
 #[test]
 fn instantiate_works() {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
-    setup(&owned_runner.as_ref());
+    setup(&owned_runner.as_ref(), 0);
 }
