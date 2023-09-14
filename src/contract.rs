@@ -19,7 +19,9 @@ use crate::query::{
     query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
 };
 use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
-use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
+use crate::withdraw::{
+    callback_after_redeem, callback_after_withdraw_liq, execute_redeem, execute_withdraw_unlocked,
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -66,18 +68,23 @@ pub fn execute(
                 min_out,
             )
         }
-        ExecuteMsg::Withdraw {
+        ExecuteMsg::Redeem {
             vault_address,
             recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            recipient,
-            withdraw_assets,
-        ),
+            zap_to,
+            min_out,
+        } => {
+            let min_out = min_out.check(deps.api)?;
+            execute_redeem(
+                deps,
+                env,
+                info,
+                api.addr_validate(&vault_address)?,
+                recipient,
+                zap_to,
+                min_out,
+            )
+        }
         ExecuteMsg::Unlock { vault_address } => {
             execute_unlock(deps, env, info, api.addr_validate(&vault_address)?)
         }
@@ -85,16 +92,21 @@ pub fn execute(
             vault_address,
             lockup_id,
             recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw_unlocked(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            lockup_id,
-            recipient,
-            withdraw_assets,
-        ),
+            zap_to,
+            min_out,
+        } => {
+            let min_out = min_out.check(deps.api)?;
+            execute_withdraw_unlocked(
+                deps,
+                env,
+                info,
+                api.addr_validate(&vault_address)?,
+                lockup_id,
+                recipient,
+                zap_to,
+                min_out,
+            )
+        }
         ExecuteMsg::Callback(msg) => {
             // Can only be called by self
             if info.sender != env.contract.address {
@@ -142,6 +154,18 @@ pub fn execute(
                     balance_before,
                     min_out,
                 ),
+                CallbackMsg::AfterRedeem {
+                    zap_to,
+                    vault_base_token,
+                    recipient,
+                    min_out,
+                } => callback_after_redeem(deps, env, zap_to, vault_base_token, recipient, min_out),
+                CallbackMsg::AfterWithdrawLiq {
+                    assets,
+                    zap_to,
+                    recipient,
+                    min_out,
+                } => callback_after_withdraw_liq(deps, env, assets, zap_to, recipient, min_out),
             }
         }
     }

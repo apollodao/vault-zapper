@@ -4,9 +4,7 @@ use cosmwasm_std::Binary;
 use cosmwasm_std::{to_binary, Addr, Coin, DepsMut, Empty, Env, MessageInfo, Response, Uint128};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
-use cw_vault_standard::{
-    ExtensionQueryMsg, VaultContract, VaultInfoResponse, VaultStandardQueryMsg,
-};
+use cw_vault_standard::VaultContract;
 
 use crate::helpers::VaultHelper;
 use crate::msg::CallbackMsg;
@@ -29,17 +27,14 @@ pub fn execute_deposit(
     let receive_assets_res = receive_assets(&info, &env, &caller_funds)?;
 
     // Query the vault info to get the deposit asset
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
-    let deposit_asset_info = match deps.api.addr_validate(&vault_info.base_token) {
-        Ok(addr) => AssetInfo::Cw20(addr),
-        Err(_) => AssetInfo::Native(vault_info.base_token),
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let deposit_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
     };
 
     // Add a message to enforce the minimum amount of vault tokens received
-    let vault_token = AssetInfo::native(vault_info.vault_token);
+    let vault_token = AssetInfo::native(&vault.vault_token);
     let balance_before = vault_token.query_balance(&deps.querier, recipient.clone())?;
     let enforce_min_out_msg = CallbackMsg::EnforceMinOut {
         asset: vault_token,
@@ -53,8 +48,6 @@ pub fn execute_deposit(
     // If yes, then just deposit the coins
     if caller_funds.len() == 1 && caller_funds.to_vec()[0].info == deposit_asset_info {
         let amount = caller_funds.to_vec()[0].amount;
-        let vault: VaultContract<_, _> =
-            VaultContract::<Empty, Empty>::new(&deps.querier, &vault_address)?;
         let msgs = vault.increase_allowance_and_deposit(
             amount,
             &deposit_asset_info,

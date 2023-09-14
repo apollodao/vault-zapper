@@ -30,4 +30,7 @@ pub enum ContractError {
 
     #[error("Minimum amount not met. Expected {min_out}, got {actual}")]
     MinOutNotMet { min_out: Uint128, actual: Uint128 },
+
+    #[error("Invalid min_out argument")]
+    InvalidMinOut {},
 }

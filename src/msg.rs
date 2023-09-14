@@ -1,4 +1,4 @@
-use apollo_cw_asset::{AssetInfo, AssetListUnchecked};
+use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
@@ -24,10 +24,17 @@ pub enum ExecuteMsg {
         /// vault tokens received is less than this, the transaction will fail.
         min_out: Uint128,
     },
-    Withdraw {
+    /// Redeem vault tokens and optionally swap the redeemed assets to other assets
+    Redeem {
+        /// The address of the vault to redeem from
         vault_address: String,
+        /// The recipient of the redeemed assets
         recipient: Option<String>,
+        /// The assets to swap the redeemed assets to
         zap_to: ZapTo,
+        /// The minimum amount of assets to receive. If the amount of assets
+        /// received is less than this, the transaction will fail.
+        min_out: AssetListUnchecked,
     },
     Unlock {
         vault_address: String,
@@ -37,6 +44,7 @@ pub enum ExecuteMsg {
         lockup_id: u64,
         recipient: Option<String>,
         zap_to: ZapTo,
+        min_out: AssetListUnchecked,
     },
     Callback(CallbackMsg),
 }
@@ -72,6 +80,20 @@ pub enum CallbackMsg {
         /// `asset` received is less than this, the transaction will fail.
         min_out: Uint128,
     },
+    /// Called after redeeming vault tokens
+    AfterRedeem {
+        zap_to: ZapTo,
+        vault_base_token: AssetInfo,
+        recipient: Addr,
+        min_out: AssetList,
+    },
+    /// Called after withdrawing liquidity from a pool
+    AfterWithdrawLiq {
+        assets: Vec<AssetInfo>,
+        zap_to: ZapTo,
+        recipient: Addr,
+        min_out: AssetList,
+    },
 }
 
 impl CallbackMsg {
@@ -92,9 +114,9 @@ pub enum QueryMsg {
     #[returns(Vec<AssetInfo>)]
     DepositableAssets { vault_address: String },
 
-    /// Returns Vec<AssetInfo>. The user may chose one of the options in
+    /// Returns Vec<ZapTo>. The user may chose one of the options in
     /// this vec when calling Withdraw or WithdrawUnlocked.
-    #[returns(Vec<AssetInfo>)]
+    #[returns(Vec<ZapTo>)]
     WithdrawableAssets { vault_address: String },
 
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these
@@ -112,19 +134,17 @@ pub struct MigrateMsg {}
 
 #[cw_serde]
 pub enum ZapTo {
-    /// Zap to asset
-    Asset(AssetInfo),
-    /// Zap to underlying LP assets
-    Underlying {},
+    Single(AssetInfo),
+    Multi(Vec<AssetInfo>),
 }
 
 #[test]
 pub fn test_withdrawable_asset() {
     //Example response for ATOM-OSMO pool
     let _example_response: Vec<ZapTo> = vec![
-        ZapTo::Asset(AssetInfo::Native("osmo".to_string())),
-        ZapTo::Asset(AssetInfo::Native("usdc".to_string())),
-        ZapTo::Asset(AssetInfo::Native("atom".to_string())),
-        ZapTo::Underlying {},
+        ZapTo::Single(AssetInfo::native("uosmo")),
+        ZapTo::Single(AssetInfo::native("uusdc")),
+        ZapTo::Single(AssetInfo::native("uatom")),
+        ZapTo::Multi(vec![AssetInfo::native("uatom"), AssetInfo::native("uosmo")]),
     ];
 }
