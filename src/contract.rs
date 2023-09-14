@@ -194,7 +194,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-pub const UNLOCK_REPLY_ID: u64 = 0u64;
+pub const UNLOCK_REPLY_ID: u64 = 143u64;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
