@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
-use apollo_cw_asset::{AssetInfo, AssetList};
+use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked};
 use apollo_utils::assets::separate_natives_and_cw20s;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, Coins, Decimal, Uint128};
+use cosmwasm_std::{assert_approx_eq, coin, Coin, Coins, Decimal, Uint128};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use cw_it::astroport::robot::AstroportTestRobot;
@@ -18,7 +18,7 @@ use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use liquidity_helper::LiquidityHelperUnchecked;
 use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
-use vault_zapper::msg::{ExecuteMsg, InstantiateMsg};
+use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, ZapTo};
 
 pub const VAULT_ZAPPER_WASM_NAME: &str = "vault_zapper.wasm";
 pub const ASTROPORT_ARTIFACTS_DIR: &str = "astroport-artifacts";
@@ -235,6 +235,58 @@ impl<'a> VaultZapperRobot<'a> {
             signer,
         ));
 
+        self
+    }
+
+    /// Redeem the specified amount of vault tokens from the vault via the vault zapper
+    pub fn zapper_redeem(
+        &self,
+        amount: Uint128,
+        recipient: Option<String>,
+        zap_to: ZapTo,
+        min_out: impl Into<AssetListUnchecked>,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        let min_out = min_out.into();
+        unwrap_choice.unwrap(self.wasm().execute(
+            &self.vault_zapper_addr,
+            &ExecuteMsg::Redeem {
+                vault_address: self.deps.vault_robot.vault_addr(),
+                recipient,
+                zap_to,
+                min_out,
+            },
+            &[coin(amount.u128(), self.deps.vault_robot.vault_token())],
+            signer,
+        ));
+        self
+    }
+
+    /// Redeem all vault tokens from the vault via the vault zapper
+    pub fn zapper_redeem_all(
+        &self,
+        recipient: Option<String>,
+        zap_to: ZapTo,
+        min_out: impl Into<AssetListUnchecked>,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        let balance = self.query_vault_token_balance(signer.address());
+        self.zapper_redeem(balance, recipient, zap_to, min_out, unwrap_choice, signer)
+    }
+
+    /// Asserts that the balance of an Astroport AssetInfo for the given address is approximately
+    /// equal to the expected amount, with the given max relative difference as a string percentage.
+    pub fn assert_asset_balance_approx_eq(
+        &self,
+        asset: impl Into<cw_it::astroport::astroport::asset::AssetInfo>,
+        address: &str,
+        expected: impl Into<Uint128>,
+        max_rel_diff: &str,
+    ) -> &Self {
+        let actual = self.query_asset_balance(&asset.into(), address);
+        assert_approx_eq!(actual, expected.into(), max_rel_diff);
         self
     }
 }
