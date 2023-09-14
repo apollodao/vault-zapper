@@ -131,6 +131,7 @@ impl<'a> VaultZapperRobot<'a> {
     pub fn instantiate_deps(
         runner: &'a TestRunner,
         dependency_artifacts_dir: &str,
+        vault_lock_duration: u64,
         signer: &SigningAccount,
     ) -> VaultZapperDependencies<'a> {
         // TODO: Support Osmosis vault with osmosis liquidity helper
@@ -138,12 +139,13 @@ impl<'a> VaultZapperRobot<'a> {
             LockedAstroportVaultRobot::instantiate_deps(runner, signer, dependency_artifacts_dir);
         let vault_treasury_addr = runner.init_account(&[]).unwrap().address();
         let (reward_vault_robot, axl_ntrn_pool, _astro_ntrn_pool) =
-            LockedAstroportVaultRobot::new_unlocked_axlr_ntrn_vault(
+            LockedAstroportVaultRobot::new_axlr_ntrn_vault(
                 runner,
                 LockedAstroportVaultRobot::contract(runner, dependency_artifacts_dir),
                 Coin::from_str(DENOM_CREATION_FEE).unwrap(),
                 vault_treasury_addr,
                 Decimal::percent(5),
+                vault_lock_duration,
                 &vault_dependencies,
                 signer,
             );
@@ -241,7 +243,7 @@ impl<'a> VaultZapperRobot<'a> {
     /// Redeem the specified amount of vault tokens from the vault via the vault zapper
     pub fn zapper_redeem(
         &self,
-        amount: Uint128,
+        amount: impl Into<u128>,
         recipient: Option<String>,
         zap_to: ZapTo,
         min_out: impl Into<AssetListUnchecked>,
@@ -257,13 +259,13 @@ impl<'a> VaultZapperRobot<'a> {
                 zap_to,
                 min_out,
             },
-            &[coin(amount.u128(), self.deps.vault_robot.vault_token())],
+            &[coin(amount.into(), self.deps.vault_robot.vault_token())],
             signer,
         ));
         self
     }
 
-    /// Redeem all vault tokens from the vault via the vault zapper
+    /// Redeem all of the signer's vault tokens from the vault via the vault zapper
     pub fn zapper_redeem_all(
         &self,
         recipient: Option<String>,
@@ -274,6 +276,59 @@ impl<'a> VaultZapperRobot<'a> {
     ) -> &Self {
         let balance = self.query_vault_token_balance(signer.address());
         self.zapper_redeem(balance, recipient, zap_to, min_out, unwrap_choice, signer)
+    }
+
+    /// Unlock the vault via the vault zapper
+    pub fn zapper_unlock(&self, amount: impl Into<u128>, signer: &SigningAccount) -> &Self {
+        self.wasm()
+            .execute(
+                &self.vault_zapper_addr,
+                &ExecuteMsg::Unlock {
+                    vault_address: self.deps.vault_robot.vault_addr(),
+                },
+                &[coin(amount.into(), self.deps.vault_robot.vault_token())],
+                signer,
+            )
+            .unwrap();
+        self
+    }
+
+    /// Unlock all of the signer's vault tokens from the vault via the vault zapper
+    pub fn zapper_unlock_all(&self, signer: &SigningAccount) -> &Self {
+        let balance = self.query_vault_token_balance(signer.address());
+        self.zapper_unlock(balance, signer)
+    }
+
+    /// Withdraw unlocked assets from the vault via the vault zapper
+    pub fn zapper_withdraw_unlocked(
+        &self,
+        lockup_id: u64,
+        recipient: Option<String>,
+        zap_to: ZapTo,
+        min_out: impl Into<AssetListUnchecked>,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        let min_out = min_out.into();
+        unwrap_choice.unwrap(self.wasm().execute(
+            &self.vault_zapper_addr,
+            &ExecuteMsg::WithdrawUnlocked {
+                vault_address: self.deps.vault_robot.vault_addr(),
+                lockup_id,
+                recipient,
+                zap_to,
+                min_out,
+            },
+            &[],
+            signer,
+        ));
+        self
+    }
+
+    /// Increases the test runner's block time by the given number of seconds
+    pub fn increase_time(&self, seconds: u64) -> &Self {
+        self.runner.increase_time(seconds).unwrap();
+        self
     }
 
     /// Asserts that the balance of an Astroport AssetInfo for the given address is approximately

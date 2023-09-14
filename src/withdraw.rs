@@ -99,20 +99,20 @@ pub fn withdraw(
         Err(_) => AssetInfo::native(&vault.base_token),
     };
 
-    // Make sure vault token was sent
-    if info.funds.len() != 1 || &info.funds[0].denom != vault_token_denom {
-        return Err(ContractError::InvalidVaultToken {});
-    }
-    let vault_token = info.funds[0].clone();
-
-    println!("vault_token: {:?}", vault_token);
-
     // Get withdraw msg
     let withdraw_msg = match withdraw_type {
-        RedeemType::Normal => vault.redeem(vault_token.amount, None)?,
+        RedeemType::Normal => {
+            // Make sure vault token was sent
+            if info.funds.len() != 1 || &info.funds[0].denom != vault_token_denom {
+                return Err(ContractError::InvalidVaultToken {});
+            }
+            let vault_token = info.funds[0].clone();
+
+            vault.redeem(vault_token.amount, None)?
+        }
         RedeemType::Lockup(lockup_id) => CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
-            funds: vec![vault_token],
+            funds: vec![],
             msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
                 ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
                     recipient: None,
@@ -145,8 +145,6 @@ pub fn callback_after_redeem(
     let base_token_balance =
         vault_base_token.query_balance(&deps.querier, &env.contract.address)?;
     let base_token = Asset::new(vault_base_token.clone(), base_token_balance);
-
-    println!("base_token: {:?}", base_token);
 
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_base_token).ok();
 
@@ -233,8 +231,6 @@ pub fn callback_after_withdraw_liq(
     let asset_balances =
         AssetList::query_asset_info_balances(assets, &deps.querier, &env.contract.address)?;
 
-    println!("asset_balances: {:?}", asset_balances);
-
     match zap_to {
         ZapTo::Single(requested_asset) => {
             let min_out = unwrap_min_out(min_out, &requested_asset)?;
@@ -244,9 +240,6 @@ pub fn callback_after_withdraw_liq(
                 .find(&requested_asset)
                 .map_or(Uint128::zero(), |x| x.amount);
             let min_out = min_out.saturating_sub(requested_asset_balance);
-
-            println!("min_out: {:?}", min_out);
-            println!("requested_asset_balance: {:?}", requested_asset_balance);
 
             // Add messages to basket liquidate the assets withdrawn from the LP, but filter out
             // the requested asset as we can't swap an asset to itself.
@@ -266,8 +259,7 @@ pub fn callback_after_withdraw_liq(
             // than 0.
             if requested_asset_balance > Uint128::zero() {
                 msgs.push(
-                    Asset::new(requested_asset, requested_asset_balance)
-                        .transfer_msg(recipient.clone())?,
+                    Asset::new(requested_asset, requested_asset_balance).transfer_msg(recipient)?,
                 );
             }
 
