@@ -16,7 +16,7 @@ use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::{
-    query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
+    query_depositable_assets, query_receive_choices, query_user_unlocking_positions,
 };
 use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
 use crate::withdraw::{
@@ -71,7 +71,7 @@ pub fn execute(
         ExecuteMsg::Redeem {
             vault_address,
             recipient,
-            zap_to,
+            receive_choice,
             min_out,
         } => {
             let min_out = min_out.check(deps.api)?;
@@ -81,7 +81,7 @@ pub fn execute(
                 info,
                 api.addr_validate(&vault_address)?,
                 recipient,
-                zap_to,
+                receive_choice,
                 min_out,
             )
         }
@@ -92,7 +92,7 @@ pub fn execute(
             vault_address,
             lockup_id,
             recipient,
-            zap_to,
+            receive_choice,
             min_out,
         } => {
             let min_out = min_out.check(deps.api)?;
@@ -103,7 +103,7 @@ pub fn execute(
                 api.addr_validate(&vault_address)?,
                 lockup_id,
                 recipient,
-                zap_to,
+                receive_choice,
                 min_out,
             )
         }
@@ -155,17 +155,31 @@ pub fn execute(
                     min_out,
                 ),
                 CallbackMsg::AfterRedeem {
-                    zap_to,
+                    receive_choice,
                     vault_base_token,
                     recipient,
                     min_out,
-                } => callback_after_redeem(deps, env, zap_to, vault_base_token, recipient, min_out),
-                CallbackMsg::AfterWithdrawLiq {
-                    assets,
-                    zap_to,
+                } => callback_after_redeem(
+                    deps,
+                    env,
+                    receive_choice,
+                    vault_base_token,
                     recipient,
                     min_out,
-                } => callback_after_withdraw_liq(deps, env, assets, zap_to, recipient, min_out),
+                ),
+                CallbackMsg::AfterWithdrawLiq {
+                    assets,
+                    receive_choice,
+                    recipient,
+                    min_out,
+                } => callback_after_withdraw_liq(
+                    deps,
+                    env,
+                    assets,
+                    receive_choice,
+                    recipient,
+                    min_out,
+                ),
             }
         }
     }
@@ -178,7 +192,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::WithdrawableAssets { vault_address } => to_binary(&query_withdrawable_assets(
+        QueryMsg::ReceiveChoices { vault_address } => to_binary(&query_receive_choices(
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),

@@ -27,7 +27,7 @@ incremental = false
 overflow-checks = true
 
 [features]
-default = []
+default = ["osmosis", "astroport"]
 # use library feature to disable all instantiate/execute/query exports
 library = []
 osmosis = ["cw-dex/osmosis"]
@@ -67,3 +67,4 @@ cw-vault-standard-test-helpers = { path = "../cw-vault-standard/test-helpers" }
 # locked-astroport-vault-test-helpers = "0.1.0-rc.2"
 locked-astroport-vault-test-helpers = { path = "../locked-astroport-vault/test-helpers" }
 astroport-liquidity-helper          = "0.2.0"
+test-case = "3.1.0"

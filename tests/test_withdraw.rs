@@ -7,7 +7,7 @@ use cw_it::{
 };
 use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use test_case::test_case;
-use vault_zapper::msg::ZapTo;
+use vault_zapper::msg::ReceiveChoice;
 
 pub mod common;
 
@@ -35,28 +35,29 @@ fn withdraw_base_token(lock_duration: u64) {
         .assert_vault_token_balance_gt(admin.address(), 0u128)
         .assert_base_token_balance_eq(admin.address(), balance - deposit_amount);
 
+    let receive_choice = ReceiveChoice::SwapTo(deposit_asset_info);
     if lock_duration == 0 {
-        robot.zapper_redeem_all(
-            None,
-            ZapTo::Single(deposit_asset_info),
-            AssetList::new(),
-            Unwrap::Ok,
-            &admin,
-        );
+        robot.zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin);
     } else {
-        let zap_to = ZapTo::Single(deposit_asset_info);
         robot
             .zapper_unlock_all(&admin)
             .zapper_withdraw_unlocked(
                 0,
                 None,
-                zap_to.clone(),
+                receive_choice.clone(),
                 AssetList::new(),
                 Unwrap::Err("Claim has not yet matured"),
                 &admin,
             )
             .increase_time(lock_duration)
-            .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin);
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice,
+                AssetList::new(),
+                Unwrap::Ok,
+                &admin,
+            );
     }
 
     robot
@@ -94,28 +95,29 @@ fn withdraw_one_asset_in_pool(lock_duration: u64) {
             balance_before - deposit_amount,
         );
 
+    let receive_choice = ReceiveChoice::SwapTo(deposit_asset_info.clone());
     if lock_duration == 0 {
-        robot.zapper_redeem_all(
-            None,
-            ZapTo::Single(deposit_asset_info.clone()),
-            AssetList::new(),
-            Unwrap::Ok,
-            &admin,
-        );
+        robot.zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin);
     } else {
-        let zap_to = ZapTo::Single(deposit_asset_info.clone());
         robot
             .zapper_unlock_all(&admin)
             .zapper_withdraw_unlocked(
                 0,
                 None,
-                zap_to.clone(),
+                receive_choice.clone(),
                 AssetList::new(),
                 Unwrap::Err("Claim has not yet matured"),
                 &admin,
             )
             .increase_time(lock_duration)
-            .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin);
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice,
+                AssetList::new(),
+                Unwrap::Ok,
+                &admin,
+            );
     };
 
     let deposit_asset_balance_after = robot
@@ -157,30 +159,31 @@ fn redeem_asset_not_in_pool(lock_duration: u64) {
             balance_before - deposit_amount,
         );
 
+    let receive_choice = ReceiveChoice::SwapTo(deposit_asset_info.clone());
     if lock_duration == 0 {
         robot
-            .zapper_redeem_all(
-                None,
-                ZapTo::Single(deposit_asset_info.clone()),
-                AssetList::new(),
-                Unwrap::Ok,
-                &admin,
-            )
+            .zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin)
             .assert_vault_token_balance_eq(admin.address(), 0u128);
     } else {
-        let zap_to = ZapTo::Single(deposit_asset_info.clone());
         robot
             .zapper_unlock_all(&admin)
             .zapper_withdraw_unlocked(
                 0,
                 None,
-                zap_to.clone(),
+                receive_choice.clone(),
                 AssetList::new(),
                 Unwrap::Err("Claim has not yet matured"),
                 &admin,
             )
             .increase_time(lock_duration)
-            .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin);
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice,
+                AssetList::new(),
+                Unwrap::Ok,
+                &admin,
+            );
     };
 
     let deposit_asset_balance_after = robot
@@ -235,31 +238,32 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
         );
 
     // Redeem both assets
+    let receive_choice = ReceiveChoice::Underlying;
     let max_rel_diff = "0.000000001"; // One unit lost due to rounding
     if lock_duration == 0 {
         robot
-            .zapper_redeem_all(
-                None,
-                ZapTo::Multi(vec![asset1.clone(), asset2.clone()]),
-                AssetList::new(),
-                Unwrap::Ok,
-                &admin,
-            )
+            .zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin)
             .assert_vault_token_balance_eq(admin.address(), 0u128);
     } else {
-        let zap_to = ZapTo::Multi(vec![asset1.clone(), asset2.clone()]);
         robot
             .zapper_unlock_all(&admin)
             .zapper_withdraw_unlocked(
                 0,
                 None,
-                zap_to.clone(),
+                receive_choice.clone(),
                 AssetList::new(),
                 Unwrap::Err("Claim has not yet matured"),
                 &admin,
             )
             .increase_time(lock_duration)
-            .zapper_withdraw_unlocked(0, None, zap_to, AssetList::new(), Unwrap::Ok, &admin)
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice,
+                AssetList::new(),
+                Unwrap::Ok,
+                &admin,
+            )
             .assert_vault_token_balance_eq(admin.address(), 0u128);
     }
 

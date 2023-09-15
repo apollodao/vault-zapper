@@ -1,12 +1,8 @@
-use apollo_cw_asset::{Asset, AssetInfo};
+use apollo_cw_asset::AssetInfo;
 use common::setup;
-use cosmwasm_std::Uint128;
 use cw_dex::traits::Pool;
-use cw_it::{
-    astroport::robot::AstroportTestRobot, helpers::Unwrap, test_tube::Account, OwnedTestRunner,
-};
-use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
-use vault_zapper::msg::ZapTo;
+use cw_it::OwnedTestRunner;
+use vault_zapper::msg::ReceiveChoice;
 
 pub mod common;
 
@@ -36,3 +32,23 @@ fn query_depositable_assets() {
     assert_eq!(depositable_assets, expected);
 }
 
+#[test]
+fn query_receive_choices() {
+    let owned_runner: OwnedTestRunner = common::get_test_runner();
+    let runner = owned_runner.as_ref();
+    let (robot, _admin) = setup(&runner, 0);
+
+    let pool_assets = robot.deps.pool_assets.clone();
+
+    let expected = vec![
+        ReceiveChoice::SwapTo(AssetInfo::native("uastro")),
+        ReceiveChoice::SwapTo(pool_assets[0].clone()),
+        ReceiveChoice::SwapTo(pool_assets[1].clone()),
+        ReceiveChoice::BaseToken,
+        ReceiveChoice::Underlying,
+    ];
+
+    let receive_choices = robot.zapper_query_receive_choices();
+
+    assert_eq!(receive_choices, expected);
+}

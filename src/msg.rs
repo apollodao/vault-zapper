@@ -30,8 +30,8 @@ pub enum ExecuteMsg {
         vault_address: String,
         /// The recipient of the redeemed assets
         recipient: Option<String>,
-        /// The assets to swap the redeemed assets to
-        zap_to: ZapTo,
+        /// The choice of which asset(s) to receive
+        receive_choice: ReceiveChoice,
         /// The minimum amount of assets to receive. If the amount of assets
         /// received is less than this, the transaction will fail.
         min_out: AssetListUnchecked,
@@ -43,7 +43,8 @@ pub enum ExecuteMsg {
         vault_address: String,
         lockup_id: u64,
         recipient: Option<String>,
-        zap_to: ZapTo,
+        /// The choice of which asset(s) to receive
+        receive_choice: ReceiveChoice,
         min_out: AssetListUnchecked,
     },
     Callback(CallbackMsg),
@@ -82,7 +83,7 @@ pub enum CallbackMsg {
     },
     /// Called after redeeming vault tokens
     AfterRedeem {
-        zap_to: ZapTo,
+        receive_choice: ReceiveChoice,
         vault_base_token: AssetInfo,
         recipient: Addr,
         min_out: AssetList,
@@ -90,7 +91,7 @@ pub enum CallbackMsg {
     /// Called after withdrawing liquidity from a pool
     AfterWithdrawLiq {
         assets: Vec<AssetInfo>,
-        zap_to: ZapTo,
+        receive_choice: ReceiveChoice,
         recipient: Addr,
         min_out: AssetList,
     },
@@ -114,10 +115,10 @@ pub enum QueryMsg {
     #[returns(Vec<AssetInfo>)]
     DepositableAssets { vault_address: String },
 
-    /// Returns Vec<ZapTo>. The user may chose one of the options in
-    /// this vec when calling Withdraw or WithdrawUnlocked.
-    #[returns(Vec<ZapTo>)]
-    WithdrawableAssets { vault_address: String },
+    /// Returns Vec<ReceiveChoice>. The user may chose one of the options in
+    /// this vec when calling Redeem or WithdrawUnlocked.
+    #[returns(Vec<ReceiveChoice>)]
+    ReceiveChoices { vault_address: String },
 
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these
     /// positions if they have finished unlocking by calling
@@ -133,18 +134,13 @@ pub enum QueryMsg {
 pub struct MigrateMsg {}
 
 #[cw_serde]
-pub enum ZapTo {
-    Single(AssetInfo),
-    Multi(Vec<AssetInfo>),
-}
-
-#[test]
-pub fn test_withdrawable_asset() {
-    //Example response for ATOM-OSMO pool
-    let _example_response: Vec<ZapTo> = vec![
-        ZapTo::Single(AssetInfo::native("uosmo")),
-        ZapTo::Single(AssetInfo::native("uusdc")),
-        ZapTo::Single(AssetInfo::native("uatom")),
-        ZapTo::Multi(vec![AssetInfo::native("uatom"), AssetInfo::native("uosmo")]),
-    ];
+/// An enum to represent the different ways to receive assets when redeeming vault tokens
+pub enum ReceiveChoice {
+    /// Just receive the base token of the vault
+    BaseToken,
+    /// If the base token wraps other assets, unwrap them and receive those. E.g. if the base_token
+    /// is an LP token, withdraw liquidity and receive the underlying assets.
+    Underlying,
+    /// Swap the base token to the specified asset
+    SwapTo(AssetInfo),
 }

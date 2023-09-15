@@ -19,7 +19,7 @@ use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use liquidity_helper::LiquidityHelperUnchecked;
 use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
-use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ZapTo};
+use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveChoice};
 
 pub const VAULT_ZAPPER_WASM_NAME: &str = "vault_zapper.wasm";
 pub const ASTROPORT_ARTIFACTS_DIR: &str = "astroport-artifacts";
@@ -246,7 +246,7 @@ impl<'a> VaultZapperRobot<'a> {
         &self,
         amount: impl Into<u128>,
         recipient: Option<String>,
-        zap_to: ZapTo,
+        receive_choice: ReceiveChoice,
         min_out: impl Into<AssetListUnchecked>,
         unwrap_choice: Unwrap,
         signer: &SigningAccount,
@@ -257,7 +257,7 @@ impl<'a> VaultZapperRobot<'a> {
             &ExecuteMsg::Redeem {
                 vault_address: self.deps.vault_robot.vault_addr(),
                 recipient,
-                zap_to,
+                receive_choice,
                 min_out,
             },
             &[coin(amount.into(), self.deps.vault_robot.vault_token())],
@@ -270,13 +270,20 @@ impl<'a> VaultZapperRobot<'a> {
     pub fn zapper_redeem_all(
         &self,
         recipient: Option<String>,
-        zap_to: ZapTo,
+        receive_choice: ReceiveChoice,
         min_out: impl Into<AssetListUnchecked>,
         unwrap_choice: Unwrap,
         signer: &SigningAccount,
     ) -> &Self {
         let balance = self.query_vault_token_balance(signer.address());
-        self.zapper_redeem(balance, recipient, zap_to, min_out, unwrap_choice, signer)
+        self.zapper_redeem(
+            balance,
+            recipient,
+            receive_choice,
+            min_out,
+            unwrap_choice,
+            signer,
+        )
     }
 
     /// Unlock the vault via the vault zapper
@@ -305,7 +312,7 @@ impl<'a> VaultZapperRobot<'a> {
         &self,
         lockup_id: u64,
         recipient: Option<String>,
-        zap_to: ZapTo,
+        receive_choice: ReceiveChoice,
         min_out: impl Into<AssetListUnchecked>,
         unwrap_choice: Unwrap,
         signer: &SigningAccount,
@@ -317,7 +324,7 @@ impl<'a> VaultZapperRobot<'a> {
                 vault_address: self.deps.vault_robot.vault_addr(),
                 lockup_id,
                 recipient,
-                zap_to,
+                receive_choice,
                 min_out,
             },
             &[],
@@ -345,7 +352,7 @@ impl<'a> VaultZapperRobot<'a> {
     }
 
     /// Queries the withdrawable assets for the vault zapper
-    pub fn zapper_query_withdrawable_assets(&self) -> Vec<ZapTo> {
+    pub fn zapper_query_receive_choices(&self) -> Vec<ReceiveChoice> {
         self.wasm()
             .query(
                 &self.vault_zapper_addr,

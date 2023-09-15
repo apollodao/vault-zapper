@@ -11,7 +11,7 @@ use cw_vault_standard::{
 };
 
 use crate::{
-    msg::{CallbackMsg, ZapTo},
+    msg::{CallbackMsg, ReceiveChoice},
     state::{LOCKUP_IDS, ROUTER},
     ContractError,
 };
@@ -27,7 +27,7 @@ pub fn execute_redeem(
     info: MessageInfo,
     vault_address: Addr,
     recipient: Option<String>,
-    zap_to: ZapTo,
+    receive_choice: ReceiveChoice,
     min_out: AssetList,
 ) -> Result<Response, ContractError> {
     withdraw(
@@ -36,7 +36,7 @@ pub fn execute_redeem(
         info,
         vault_address,
         recipient,
-        zap_to,
+        receive_choice,
         min_out,
         RedeemType::Normal,
     )
@@ -49,7 +49,7 @@ pub fn execute_withdraw_unlocked(
     vault_address: Addr,
     lockup_id: u64,
     recipient: Option<String>,
-    zap_to: ZapTo,
+    receive_choice: ReceiveChoice,
     min_out: AssetList,
 ) -> Result<Response, ContractError> {
     // Load users lockup IDs.
@@ -71,7 +71,7 @@ pub fn execute_withdraw_unlocked(
         info,
         vault_address,
         recipient,
-        zap_to,
+        receive_choice,
         min_out,
         RedeemType::Lockup(lockup_id),
     )
@@ -84,7 +84,7 @@ pub fn withdraw(
     info: MessageInfo,
     vault_address: Addr,
     recipient: Option<String>,
-    zap_to: ZapTo,
+    receive_choice: ReceiveChoice,
     min_out: AssetList,
     withdraw_type: RedeemType,
 ) -> Result<Response, ContractError> {
@@ -124,7 +124,7 @@ pub fn withdraw(
 
     Ok(Response::new().add_message(withdraw_msg).add_message(
         CallbackMsg::AfterRedeem {
-            zap_to,
+            receive_choice,
             vault_base_token,
             recipient,
             min_out,
@@ -136,7 +136,7 @@ pub fn withdraw(
 pub fn callback_after_redeem(
     deps: DepsMut,
     env: Env,
-    zap_to: ZapTo,
+    receive_choice: ReceiveChoice,
     vault_base_token: AssetInfo,
     recipient: Addr,
     min_out: AssetList,
@@ -149,8 +149,8 @@ pub fn callback_after_redeem(
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_base_token).ok();
 
     // Check requested withdrawal assets
-    match &zap_to {
-        ZapTo::Single(requested_asset) => {
+    match &receive_choice {
+        ReceiveChoice::SwapTo(requested_asset) => {
             // If the requested denom is the same as the vaults withdrawal asset, just send it to the
             // recipient.
             if requested_asset == &vault_base_token {
@@ -167,7 +167,7 @@ pub fn callback_after_redeem(
                 return Ok(withdraw_liq_res.add_message(
                     CallbackMsg::AfterWithdrawLiq {
                         assets: pool.pool_assets(deps.as_ref())?,
-                        zap_to,
+                        receive_choice,
                         recipient,
                         min_out,
                     }
@@ -185,27 +185,19 @@ pub fn callback_after_redeem(
                 return Ok(Response::new().add_messages(msgs));
             }
         }
-        ZapTo::Multi(requested_denoms) => {
-            // We currently only support withdrawing multiple assets if these
-            // the vault returns an LP token and the requested assets match the
-            // assets in the pool.
-            // TODO: Support withdrawing multiple assets that are not in the vault.
-            // To do this we need to add functionality to cw-dex-router.
+        ReceiveChoice::BaseToken => {
+            return Ok(Response::new().add_message(base_token.transfer_msg(recipient)?));
+        }
+        ReceiveChoice::Underlying => {
             if let Some(pool) = pool {
-                // Check that the requested assets match the assets in the pool
                 let pool_assets = pool.pool_assets(deps.as_ref())?;
-                if requested_denoms != &pool_assets {
-                    return Err(ContractError::Generic(
-                        "Requested assets do not match assets in pool".to_string(),
-                    ));
-                }
 
                 let res =
                     pool.withdraw_liquidity(deps.as_ref(), &env, base_token, AssetList::new())?;
                 return Ok(res.add_message(
                     CallbackMsg::AfterWithdrawLiq {
                         assets: pool_assets,
-                        zap_to,
+                        receive_choice,
                         recipient,
                         min_out,
                     }
@@ -222,7 +214,7 @@ pub fn callback_after_withdraw_liq(
     deps: DepsMut,
     env: Env,
     assets: Vec<AssetInfo>,
-    zap_to: ZapTo,
+    receive_choice: ReceiveChoice,
     recipient: Addr,
     min_out: AssetList,
 ) -> Result<Response, ContractError> {
@@ -231,8 +223,8 @@ pub fn callback_after_withdraw_liq(
     let asset_balances =
         AssetList::query_asset_info_balances(assets, &deps.querier, &env.contract.address)?;
 
-    match zap_to {
-        ZapTo::Single(requested_asset) => {
+    match receive_choice {
+        ReceiveChoice::SwapTo(requested_asset) => {
             let min_out = unwrap_min_out(min_out, &requested_asset)?;
             // Subtract the requested asset balance from min_out, as we will
             // transfer this amount to the recipient.
@@ -265,7 +257,7 @@ pub fn callback_after_withdraw_liq(
 
             Ok(Response::new().add_messages(msgs))
         }
-        ZapTo::Multi(_) => {
+        ReceiveChoice::Underlying => {
             // Verify min_out and then just send the assets to the recipient
             for min_asset in min_out.into_iter() {
                 if asset_balances
@@ -286,6 +278,9 @@ pub fn callback_after_withdraw_liq(
 
             let msgs = asset_balances.transfer_msgs(recipient)?;
             Ok(Response::new().add_messages(msgs))
+        }
+        ReceiveChoice::BaseToken => {
+            panic!("Should not be possible to receive base token from callback_after_withdraw_liq")
         }
     }
 }

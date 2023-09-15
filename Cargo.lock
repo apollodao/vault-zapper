@@ -843,9 +843,7 @@ dependencies = [
 
 [[package]]
 name = "cw-dex-router"
-version = "0.2.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "997acbdb4a41033b64dc1f764686bf19e6e045aa2bafd41d638fb8b296ade7e7"
+version = "0.2.0-rc.2"
 dependencies = [
  "apollo-cw-asset",
  "apollo-utils",
@@ -999,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "cw-vault-standard"
-version = "0.3.3-rc.3"
+version = "0.3.3-rc.4"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -1010,12 +1008,12 @@ dependencies = [
 
 [[package]]
 name = "cw-vault-standard-test-helpers"
-version = "0.3.3-rc.3"
+version = "0.3.3-rc.4"
 dependencies = [
  "cosmwasm-std",
  "cw-it",
  "cw-utils 1.0.1",
- "cw-vault-standard 0.3.3-rc.3",
+ "cw-vault-standard 0.3.3-rc.4",
 ]
 
 [[package]]
@@ -1877,7 +1875,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-address-like",
  "cw-dex 0.4.0-rc.2",
- "cw-dex-router 0.2.0-rc.1",
+ "cw-dex-router 0.2.0-rc.2",
  "cw-item-set",
  "cw-ownable",
  "cw-storage-plus 1.1.0",
@@ -1903,7 +1901,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-dex 0.4.0-rc.2",
- "cw-dex-router 0.2.0-rc.1",
+ "cw-dex-router 0.2.0-rc.2",
  "cw-it",
  "cw-ownable",
  "cw-utils 1.0.1",
@@ -2333,6 +2331,30 @@ checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
  "der 0.7.8",
  "spki 0.7.2",
+]
+
+[[package]]
+name = "proc-macro-error"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
+dependencies = [
+ "proc-macro-error-attr",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
+ "version_check",
+]
+
+[[package]]
+name = "proc-macro-error-attr"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "version_check",
 ]
 
 [[package]]
@@ -3106,6 +3128,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-case"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a1d6e7bde536b0412f20765b76e921028059adfd1b90d8974d33fd3c91b25df"
+dependencies = [
+ "test-case-macros",
+]
+
+[[package]]
+name = "test-case-core"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10394d5d1e27794f772b6fc854c7e91a2dc26e2cbf807ad523370c2a59c0cee"
+dependencies = [
+ "cfg-if",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "test-case-macros"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eeb9a44b1c6a54c1ba58b152797739dba2a83ca74e18168a68c980eb142f9404"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
+ "test-case-core",
+]
+
+[[package]]
 name = "test-tube"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3360,6 +3417,7 @@ dependencies = [
  "cw20 1.1.0",
  "liquidity-helper 0.1.0",
  "locked-astroport-vault-test-helpers",
+ "test-case",
  "thiserror",
 ]
 

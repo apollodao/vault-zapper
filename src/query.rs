@@ -1,23 +1,25 @@
 use apollo_cw_asset::AssetInfo;
-use cosmwasm_std::{Addr, Deps, Env, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, Empty, Env, StdError, StdResult};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 
+use crate::msg::ReceiveChoice;
 use crate::state::{LOCKUP_IDS, ROUTER};
 
 use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
-use cw_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
+use cw_vault_standard::{
+    ExtensionQueryMsg, VaultContract, VaultInfoResponse, VaultStandardQueryMsg,
+};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
-
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let deposit_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
+    };
 
     // Check if deposit asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
@@ -47,36 +49,29 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
     let supported_offer_assets =
         router.query_supported_offer_assets(&deps.querier, &target_asset)?;
 
-    let mut depositable_assets = vec![deposit_asset_info];
-
-    // Get only native coins from supported offer assets
-    for asset in supported_offer_assets {
-        if let AssetInfo::Native(_) = &asset {
-            depositable_assets.push(asset);
-        }
-    }
+    let depositable_assets = [
+        &[deposit_asset_info, target_asset],
+        supported_offer_assets.as_slice(),
+    ]
+    .concat();
 
     Ok(depositable_assets)
 }
 
-pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
+pub fn query_receive_choices(deps: Deps, vault_address: Addr) -> StdResult<Vec<ReceiveChoice>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
-
-    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token);
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let withdraw_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
+    };
 
     // Check if the withdrawn asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
 
-    // Create withdrawable assets vec with first one being the withdraw asset
-    let mut withdrawable_assets = vec![withdraw_asset_info.clone()];
-
-    let supported_ask_assets: Vec<AssetInfo> = match pool {
+    let swap_to_choices: Vec<AssetInfo> = match pool {
         Some(pool) => {
             // Get the assets in the pool
             let pool_tokens: Vec<AssetInfo> = pool
@@ -101,9 +96,7 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
                 }
             }
 
-            // Add the multi-token case where equal to the tokens in the pair
-            withdrawable_assets.extend(pool_tokens);
-
+            supported_ask_assets.extend(pool_tokens);
             supported_ask_assets
         }
         None => {
@@ -112,14 +105,18 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
         }
     };
 
-    // Add all supported ask assets as single withdrawal options
-    for ask_asset in supported_ask_assets {
-        if let AssetInfo::Native(_) = &ask_asset {
-            withdrawable_assets.push(ask_asset);
-        }
-    }
+    let swap_to_choices = swap_to_choices
+        .iter()
+        .map(|asset| ReceiveChoice::SwapTo(asset.clone()))
+        .collect::<Vec<_>>();
 
-    Ok(withdrawable_assets)
+    let receive_choices = [
+        swap_to_choices.as_slice(),
+        &[ReceiveChoice::BaseToken, ReceiveChoice::Underlying],
+    ]
+    .concat();
+
+    Ok(receive_choices)
 }
 
 pub fn query_user_unlocking_positions(
