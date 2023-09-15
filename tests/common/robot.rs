@@ -389,4 +389,14 @@ impl<'a> VaultZapperRobot<'a> {
         assert_approx_eq!(actual, expected.into(), max_rel_diff);
         self
     }
+
+    pub fn assert_zapper_has_unlocking_positions(
+        &self,
+        owner: &str,
+        expected: &[UnlockingPosition],
+    ) -> &Self {
+        let unlocking_positions = self.zapper_query_unlocking_positions(owner);
+        assert_eq!(unlocking_positions, expected);
+        self
+    }
 }

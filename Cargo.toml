@@ -68,3 +68,4 @@ cw-vault-standard-test-helpers = { path = "../cw-vault-standard/test-helpers" }
 locked-astroport-vault-test-helpers = { path = "../locked-astroport-vault/test-helpers" }
 astroport-liquidity-helper          = "0.2.0"
 test-case = "3.1.0"
+cw-utils = "1.0.1"

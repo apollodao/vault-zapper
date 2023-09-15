@@ -7,9 +7,7 @@ use crate::msg::ReceiveChoice;
 use crate::state::{LOCKUP_IDS, ROUTER};
 
 use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
-use cw_vault_standard::{
-    ExtensionQueryMsg, VaultContract, VaultInfoResponse, VaultStandardQueryMsg,
-};
+use cw_vault_standard::{ExtensionQueryMsg, VaultContract, VaultStandardQueryMsg};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
