@@ -14,11 +14,12 @@ use cw_it::robot::TestRobot;
 use cw_it::test_tube::{Account, Module, SigningAccount, Wasm};
 use cw_it::traits::CwItRunner;
 use cw_it::{ContractType, TestRunner};
+use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use liquidity_helper::LiquidityHelperUnchecked;
 use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
-use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, ZapTo};
+use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ZapTo};
 
 pub const VAULT_ZAPPER_WASM_NAME: &str = "vault_zapper.wasm";
 pub const ASTROPORT_ARTIFACTS_DIR: &str = "astroport-artifacts";
@@ -329,6 +330,43 @@ impl<'a> VaultZapperRobot<'a> {
     pub fn increase_time(&self, seconds: u64) -> &Self {
         self.runner.increase_time(seconds).unwrap();
         self
+    }
+
+    /// Queries the depositable assets for the vault zapper
+    pub fn zapper_query_depositable_assets(&self) -> Vec<AssetInfo> {
+        self.wasm()
+            .query(
+                &self.vault_zapper_addr,
+                &QueryMsg::DepositableAssets {
+                    vault_address: self.vault_addr(),
+                },
+            )
+            .unwrap()
+    }
+
+    /// Queries the withdrawable assets for the vault zapper
+    pub fn zapper_query_withdrawable_assets(&self) -> Vec<ZapTo> {
+        self.wasm()
+            .query(
+                &self.vault_zapper_addr,
+                &QueryMsg::ReceiveChoices {
+                    vault_address: self.vault_addr(),
+                },
+            )
+            .unwrap()
+    }
+
+    /// Queries the unlocking positions for the vault zapper
+    pub fn zapper_query_unlocking_positions(&self, owner: &str) -> Vec<UnlockingPosition> {
+        self.wasm()
+            .query(
+                &self.vault_zapper_addr,
+                &QueryMsg::UnlockingPositions {
+                    vault_address: self.vault_addr(),
+                    owner: owner.to_string(),
+                },
+            )
+            .unwrap()
     }
 
     /// Asserts that the balance of an Astroport AssetInfo for the given address is approximately
