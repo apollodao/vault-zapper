@@ -1,10 +1,9 @@
 pub mod robot;
-use cw_it::{
-    cw_multi_test::{StargateKeeper, StargateMessageHandler},
-    multi_test::{modules::TokenFactory, MultiTestRunner},
-    test_tube::SigningAccount,
-    OwnedTestRunner, TestRunner,
-};
+use cw_it::cw_multi_test::{StargateKeeper, StargateMessageHandler};
+use cw_it::multi_test::modules::TokenFactory;
+use cw_it::multi_test::MultiTestRunner;
+use cw_it::test_tube::SigningAccount;
+use cw_it::{OwnedTestRunner, TestRunner};
 pub use robot::*;
 
 #[cfg(feature = "osmosis-test-tube")]
@@ -35,14 +34,14 @@ pub fn setup<'a>(
     runner: &'a TestRunner<'a>,
     vault_lock_duration: u64,
 ) -> (VaultZapperRobot<'a>, SigningAccount) {
-    let admin = VaultZapperRobot::default_account(&runner);
+    let admin = VaultZapperRobot::default_account(runner);
     let deps = VaultZapperRobot::instantiate_deps(
-        &runner,
+        runner,
         DEPENDENCY_ARTIFACTS_DIR,
         vault_lock_duration,
         &admin,
     );
-    let robot = VaultZapperRobot::instantiate(&runner, deps, DEPENDENCY_ARTIFACTS_DIR, &admin);
+    let robot = VaultZapperRobot::instantiate(runner, deps, DEPENDENCY_ARTIFACTS_DIR, &admin);
 
     (robot, admin)
 }

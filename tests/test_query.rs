@@ -2,7 +2,10 @@ use apollo_cw_asset::{Asset, AssetInfo};
 use common::setup;
 use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_dex::traits::Pool;
-use cw_it::{helpers::Unwrap, test_tube::Account, traits::CwItRunner, OwnedTestRunner};
+use cw_it::helpers::Unwrap;
+use cw_it::test_tube::Account;
+use cw_it::traits::CwItRunner;
+use cw_it::OwnedTestRunner;
 use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use vault_zapper::msg::ReceiveChoice;
@@ -22,15 +25,16 @@ fn query_depositable_assets() {
     let mut expected = [
         &[
             robot.deps.vault_pool.lp_token(),
-            AssetInfo::native("uastro"), // There is a swap path from uastro to each of the pool assets
+            AssetInfo::native("uastro"), /* There is a swap path from uastro to each of the pool
+                                          * assets */
         ],
         pool_assets.as_slice(),
     ]
     .concat();
 
     // Sort both so we can compare them
-    depositable_assets.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
-    expected.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+    depositable_assets.sort_by_key(|a| a.to_string());
+    expected.sort_by_key(|a| a.to_string());
 
     assert_eq!(depositable_assets, expected);
 }

@@ -24,7 +24,8 @@ pub enum ExecuteMsg {
         /// vault tokens received is less than this, the transaction will fail.
         min_out: Uint128,
     },
-    /// Redeem vault tokens and optionally swap the redeemed assets to other assets
+    /// Redeem vault tokens and optionally swap the redeemed assets to other
+    /// assets
     Redeem {
         /// The address of the vault to redeem from
         vault_address: String,
@@ -134,12 +135,14 @@ pub enum QueryMsg {
 pub struct MigrateMsg {}
 
 #[cw_serde]
-/// An enum to represent the different ways to receive assets when redeeming vault tokens
+/// An enum to represent the different ways to receive assets when redeeming
+/// vault tokens
 pub enum ReceiveChoice {
     /// Just receive the base token of the vault
     BaseToken,
-    /// If the base token wraps other assets, unwrap them and receive those. E.g. if the base_token
-    /// is an LP token, withdraw liquidity and receive the underlying assets.
+    /// If the base token wraps other assets, unwrap them and receive those.
+    /// E.g. if the base_token is an LP token, withdraw liquidity and
+    /// receive the underlying assets.
     Underlying,
     /// Swap the base token to the specified asset
     SwapTo(AssetInfo),

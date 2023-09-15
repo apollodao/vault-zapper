@@ -1,4 +1,5 @@
-use cosmwasm_schema::{schemars::JsonSchema, serde::Serialize};
+use cosmwasm_schema::schemars::JsonSchema;
+use cosmwasm_schema::serde::Serialize;
 
 use apollo_cw_asset::AssetInfo;
 use cosmwasm_std::{to_binary, CosmosMsg, StdResult, Uint128, WasmMsg};
@@ -6,8 +7,8 @@ use cw_vault_standard::VaultContract;
 
 /// A trait to help with depositing an `Asset` into a vault.
 pub trait VaultHelper {
-    /// Returns a vector of CosmosMsgs that will increase the allowance of the token if it is a CW20
-    /// and deposit the token into the vault.
+    /// Returns a vector of CosmosMsgs that will increase the allowance of the
+    /// token if it is a CW20 and deposit the token into the vault.
     fn increase_allowance_and_deposit(
         &self,
         amount: Uint128,

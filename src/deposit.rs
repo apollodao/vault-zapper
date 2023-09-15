@@ -1,15 +1,15 @@
 use apollo_cw_asset::{AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
-use cosmwasm_std::Binary;
-use cosmwasm_std::{to_binary, Addr, Coin, DepsMut, Empty, Env, MessageInfo, Response, Uint128};
+use cosmwasm_std::{
+    to_binary, Addr, Binary, Coin, DepsMut, Empty, Env, MessageInfo, Response, Uint128,
+};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 use cw_vault_standard::VaultContract;
 
 use crate::helpers::VaultHelper;
 use crate::msg::CallbackMsg;
-use crate::state::LIQUIDITY_HELPER;
-use crate::state::ROUTER;
+use crate::state::{LIQUIDITY_HELPER, ROUTER};
 use crate::ContractError;
 
 pub fn execute_deposit(

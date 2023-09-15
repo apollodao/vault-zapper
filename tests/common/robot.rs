@@ -162,7 +162,8 @@ impl<'a> VaultZapperRobot<'a> {
         testa
     }
 
-    /// Creates a new `VaultZapperRobot` by uploading and instantiating the contract
+    /// Creates a new `VaultZapperRobot` by uploading and instantiating the
+    /// contract
     pub fn instantiate(
         runner: &'a TestRunner<'a>,
         dependencies: VaultZapperDependencies<'a>,
@@ -241,7 +242,8 @@ impl<'a> VaultZapperRobot<'a> {
         self
     }
 
-    /// Redeem the specified amount of vault tokens from the vault via the vault zapper
+    /// Redeem the specified amount of vault tokens from the vault via the vault
+    /// zapper
     pub fn zapper_redeem(
         &self,
         amount: impl Into<u128>,
@@ -266,7 +268,8 @@ impl<'a> VaultZapperRobot<'a> {
         self
     }
 
-    /// Redeem all of the signer's vault tokens from the vault via the vault zapper
+    /// Redeem all of the signer's vault tokens from the vault via the vault
+    /// zapper
     pub fn zapper_redeem_all(
         &self,
         recipient: Option<String>,
@@ -301,7 +304,8 @@ impl<'a> VaultZapperRobot<'a> {
         self
     }
 
-    /// Unlock all of the signer's vault tokens from the vault via the vault zapper
+    /// Unlock all of the signer's vault tokens from the vault via the vault
+    /// zapper
     pub fn zapper_unlock_all(&self, signer: &SigningAccount) -> &Self {
         let balance = self.query_vault_token_balance(signer.address());
         self.zapper_unlock(balance, signer)
@@ -376,8 +380,9 @@ impl<'a> VaultZapperRobot<'a> {
             .unwrap()
     }
 
-    /// Asserts that the balance of an Astroport AssetInfo for the given address is approximately
-    /// equal to the expected amount, with the given max relative difference as a string percentage.
+    /// Asserts that the balance of an Astroport AssetInfo for the given address
+    /// is approximately equal to the expected amount, with the given max
+    /// relative difference as a string percentage.
     pub fn assert_asset_balance_approx_eq(
         &self,
         asset: impl Into<cw_it::astroport::astroport::asset::AssetInfo>,
