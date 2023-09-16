@@ -844,6 +844,8 @@ dependencies = [
 [[package]]
 name = "cw-dex-router"
 version = "0.2.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4dcc1413a73797fbc909eb606d889350ef0b345dddeda82f904fe7de34e96e6"
 dependencies = [
  "apollo-cw-asset",
  "apollo-utils",
@@ -996,24 +998,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-vault-standard"
-version = "0.3.3-rc.4"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-utils 1.0.1",
- "schemars",
- "serde",
-]
-
-[[package]]
 name = "cw-vault-standard-test-helpers"
 version = "0.3.3-rc.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8ec267767fbf156d6150b071cdfae2a42d6389dbb2d214e9d2b52b3cf13018"
 dependencies = [
  "cosmwasm-std",
  "cw-it",
  "cw-utils 1.0.1",
- "cw-vault-standard 0.3.3-rc.4",
+ "cw-vault-standard",
 ]
 
 [[package]]
@@ -1867,7 +1860,9 @@ dependencies = [
 
 [[package]]
 name = "locked-astroport-vault"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f3ebdb74ecc9d95e87fa7764380b42773b1fd6cfe672e1c199a6e115ecfbed0"
 dependencies = [
  "apollo-cw-asset",
  "apollo-utils",
@@ -1880,7 +1875,7 @@ dependencies = [
  "cw-ownable",
  "cw-storage-plus 1.1.0",
  "cw-utils 1.0.1",
- "cw-vault-standard 0.3.3-rc.1",
+ "cw-vault-standard",
  "cw2 1.1.0",
  "cw20 1.1.0",
  "liquidity-helper 0.1.0",
@@ -1894,7 +1889,9 @@ dependencies = [
 
 [[package]]
 name = "locked-astroport-vault-test-helpers"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c655bdf3e9e5b99e78a14323f63df00f1674e0ee4da652a643329d9d00e6de10"
 dependencies = [
  "apollo-cw-asset",
  "astroport-liquidity-helper",
@@ -1905,7 +1902,7 @@ dependencies = [
  "cw-it",
  "cw-ownable",
  "cw-utils 1.0.1",
- "cw-vault-standard 0.3.3-rc.1",
+ "cw-vault-standard",
  "cw-vault-standard-test-helpers",
  "cw2 1.1.0",
  "cw20 1.1.0",
@@ -3412,7 +3409,7 @@ dependencies = [
  "cw-it",
  "cw-storage-plus 1.1.0",
  "cw-utils 1.0.1",
- "cw-vault-standard 0.3.3-rc.1",
+ "cw-vault-standard",
  "cw-vault-standard-test-helpers",
  "cw2 1.1.0",
  "cw20 1.1.0",

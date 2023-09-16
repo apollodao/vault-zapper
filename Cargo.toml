@@ -1,5 +1,5 @@
 [package]
-name = "vault-zapper"
+name    = "vault-zapper"
 version = "0.1.0"
 authors = ["Sturdy <sturdy@apollo.farm>"]
 edition = "2021"
@@ -47,25 +47,23 @@ cosmwasm/rust-optimizer-arm64:0.12.11
 """
 
 [dependencies]
-apollo-utils = "0.1.1"
-cosmwasm-schema = "1.4.0"
-cosmwasm-std = "1.4.0"
-cw-storage-plus = "1.1.0"
-cw2 = "1.1.0"
-cw20 = "1.1.0"
-thiserror = { version = "1.0.48" }
-cw-vault-standard = { version = "0.3.3-rc.1", features = ["lockup"] }
-cw-dex-router = { version = "0.1.0", features = ["library"] }
-apollo-cw-asset = "0.1.2"
-cw-dex = "0.4.0-rc.2"
-liquidity-helper = "0.1.0"
+apollo-utils                        = "0.1.1"
+cosmwasm-schema                     = "1.4.0"
+cosmwasm-std                        = "1.4.0"
+cw-storage-plus                     = "1.1.0"
+cw2                                 = "1.1.0"
+cw20                                = "1.1.0"
+thiserror                           = { version = "1.0.48" }
+cw-vault-standard                   = { version = "0.3.3-rc.1", features = ["lockup"] }
+cw-dex-router                       = { version = "0.1.0", features = ["library"] }
+apollo-cw-asset                     = "0.1.2"
+cw-dex                              = "0.4.0-rc.2"
+liquidity-helper                    = "0.1.0"
 
 [dev-dependencies]
-cw-it = { version = "0.2.0-rc.4", features = ["astroport-multi-test"] }
-# cw-vault-standard-test-helpers = "0.3.3-rc.3"
-cw-vault-standard-test-helpers = { path = "../cw-vault-standard/test-helpers" }
-# locked-astroport-vault-test-helpers = "0.1.0-rc.2"
-locked-astroport-vault-test-helpers = { path = "../locked-astroport-vault/test-helpers" }
+cw-it                               = { version = "0.2.0-rc.4", features = ["astroport-multi-test"] }
+cw-vault-standard-test-helpers      = "0.3.3-rc.4"
+locked-astroport-vault-test-helpers = "0.1.0-rc.4"
 astroport-liquidity-helper          = "0.2.0"
-test-case = "3.1.0"
-cw-utils = "1.0.1"
+test-case                           = "3.1.0"
+cw-utils                            = "1.0.1"
