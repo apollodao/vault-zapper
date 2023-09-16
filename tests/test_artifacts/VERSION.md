@@ -1,0 +1,6 @@
+- astroport_liquidity_helper.wasm
+    - Downloaded from [Github Releases v0.2.0](https://github.com/apollodao/liquidity-helpers/releases/tag/v0.2.0)
+- cw_dex_router_astroport.wasm
+    - Built locally with rust-optimizer-arm 0.13.0 from v0.2.0-rc.2.
+- locked_astroport_vault.wasm
+    - Built locally with rust-optimizer-arm 0.13.0 from v0.1.0-rc.2.

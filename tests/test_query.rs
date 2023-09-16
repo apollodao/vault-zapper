@@ -70,6 +70,7 @@ fn query_unlocking_positions() {
     let deposit_amount = Uint128::new(1000000);
     let deposit_asset = Asset::new(robot.deps.vault_pool.lp_token(), deposit_amount);
 
+    // Deposit and unlock half of the deposited amount
     let vault_token_balance = robot
         .zapper_deposit(
             vec![deposit_asset].into(),
@@ -79,10 +80,11 @@ fn query_unlocking_positions() {
             &admin,
         )
         .query_vault_token_balance(admin.address());
+    robot.zapper_unlock(vault_token_balance.u128() / 2, &admin);
 
+    // Query the unlocking position and unlock second half
     let current_time = runner.query_block_time_nanos();
-
-    let unlocking_position = UnlockingPosition {
+    let unlocking_position_0 = UnlockingPosition {
         id: 0,
         base_token_amount: deposit_amount / Uint128::new(2),
         owner: Addr::unchecked(robot.vault_zapper_addr.clone()),
@@ -90,21 +92,26 @@ fn query_unlocking_positions() {
             current_time + 300_000_000_000,
         )),
     };
-
     robot
-        .zapper_unlock(vault_token_balance.u128() / 2, &admin)
-        .assert_zapper_has_unlocking_positions(&admin.address(), &[unlocking_position.clone()])
-        .zapper_unlock(vault_token_balance.u128() / 2, &admin)
-        .assert_zapper_has_unlocking_positions(
-            &admin.address(),
-            &[
-                unlocking_position.clone(),
-                UnlockingPosition {
-                    id: 1,
-                    ..unlocking_position.clone()
-                },
-            ],
-        )
+        .assert_zapper_has_unlocking_positions(&admin.address(), &[unlocking_position_0.clone()])
+        .zapper_unlock(vault_token_balance.u128() / 2, &admin);
+
+    // Query the unlocking positions
+    let current_time = runner.query_block_time_nanos();
+    let unlocking_position_1 = UnlockingPosition {
+        id: 1,
+        release_at: cw_utils::Expiration::AtTime(Timestamp::from_nanos(
+            current_time + 300_000_000_000,
+        )),
+        ..unlocking_position_0.clone()
+    };
+    robot.assert_zapper_has_unlocking_positions(
+        &admin.address(),
+        &[unlocking_position_0.clone(), unlocking_position_1.clone()],
+    );
+
+    // Increase time, withdraw and assert that the unlocking positions are removed
+    robot
         .increase_time(300)
         .zapper_withdraw_unlocked(
             0,
@@ -114,13 +121,7 @@ fn query_unlocking_positions() {
             Unwrap::Ok,
             &admin,
         )
-        .assert_zapper_has_unlocking_positions(
-            &admin.address(),
-            &[UnlockingPosition {
-                id: 1,
-                ..unlocking_position
-            }],
-        )
+        .assert_zapper_has_unlocking_positions(&admin.address(), &[unlocking_position_1])
         .zapper_withdraw_unlocked(
             1,
             None,

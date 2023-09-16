@@ -21,6 +21,9 @@ use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
 use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveChoice};
 
+#[cfg(feature = "osmosis-test-tube")]
+use cw_it::Artifact;
+
 pub const VAULT_ZAPPER_WASM_NAME: &str = "vault_zapper.wasm";
 pub const ASTROPORT_ARTIFACTS_DIR: &str = "astroport-artifacts";
 pub const ASTROPORT_LIQUIDITY_HELPER_WASM_NAME: &str = "astroport_liquidity_helper.wasm";

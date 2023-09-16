@@ -128,7 +128,6 @@ pub fn execute_deposit(
         .add_message(enforce_min_out_msg))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn callback_provide_liquidity(
     deps: DepsMut,
     env: Env,

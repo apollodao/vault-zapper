@@ -9,7 +9,8 @@ pub use robot::*;
 #[cfg(feature = "osmosis-test-tube")]
 use cw_it::osmosis_test_tube::OsmosisTestApp;
 
-pub const DEPENDENCY_ARTIFACTS_DIR: &str = "tests/artifacts";
+pub const UNOPTIMIZED_PATH: &str = "target/wasm32-unknown-unknown/release";
+pub const DEPENDENCY_ARTIFACTS_DIR: &str = "tests/test_artifacts";
 
 pub const DENOM_CREATION_FEE: &str = "10000000uosmo";
 
@@ -41,7 +42,7 @@ pub fn setup<'a>(
         vault_lock_duration,
         &admin,
     );
-    let robot = VaultZapperRobot::instantiate(runner, deps, DEPENDENCY_ARTIFACTS_DIR, &admin);
+    let robot = VaultZapperRobot::instantiate(runner, deps, UNOPTIMIZED_PATH, &admin);
 
     (robot, admin)
 }
