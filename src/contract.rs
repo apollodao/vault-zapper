@@ -16,9 +16,10 @@ use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::{
-    query_depositable_assets, query_receive_choices, query_user_unlocking_positions,
+    query_all_user_unlocking_positions, query_depositable_assets, query_receive_choices,
+    query_user_unlocking_positions_for_vault,
 };
-use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
+use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_LOCK_KEY};
 use crate::withdraw::{
     callback_after_redeem, callback_after_withdraw_liq, execute_redeem, execute_withdraw_unlocked,
 };
@@ -196,14 +197,25 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::UnlockingPositions {
+        QueryMsg::UserUnlockingPositionsForVault {
             vault_address,
             owner,
-        } => to_binary(&query_user_unlocking_positions(
+        } => to_binary(&query_user_unlocking_positions_for_vault(
             deps,
             env,
             deps.api.addr_validate(&vault_address)?,
             deps.api.addr_validate(&owner)?,
+        )?),
+        QueryMsg::UserUnlockingPositions {
+            owner,
+            start_after_vault_addr,
+            limit,
+        } => to_binary(&query_all_user_unlocking_positions(
+            deps,
+            env,
+            deps.api.addr_validate(&owner)?,
+            start_after_vault_addr,
+            limit,
         )?),
     }
 }
@@ -225,21 +237,21 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 UNLOCKING_POSITION_ATTR_KEY,
             )?;
 
-            // Read temporarily stored caller address
-            let caller_addr = TEMP_UNLOCK_CALLER.load(deps.storage)?;
+            // Read temporarily stored caller address and vault address
+            let key = TEMP_LOCK_KEY.load(deps.storage)?;
 
             //Read users lock Ids.
             let mut lock_ids = LOCKUP_IDS
-                .load(deps.storage, caller_addr.clone())
+                .load(deps.storage, key.clone())
                 .unwrap_or_default();
 
             lock_ids.push(lockup_id);
 
             // Store lockup_id
-            LOCKUP_IDS.save(deps.storage, caller_addr, &lock_ids)?;
+            LOCKUP_IDS.save(deps.storage, key, &lock_ids)?;
 
-            //Erase temp caller address
-            TEMP_UNLOCK_CALLER.remove(deps.storage);
+            //Erase temp key
+            TEMP_LOCK_KEY.remove(deps.storage);
 
             Ok(Response::default())
         }

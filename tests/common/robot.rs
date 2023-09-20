@@ -370,12 +370,15 @@ impl<'a> VaultZapperRobot<'a> {
             .unwrap()
     }
 
-    /// Queries the unlocking positions for the vault zapper
-    pub fn zapper_query_unlocking_positions(&self, owner: &str) -> Vec<UnlockingPosition> {
+    /// Queries the unlocking positions for a user and the vault
+    pub fn zapper_query_user_unlocking_positions_for_vault(
+        &self,
+        owner: &str,
+    ) -> Vec<UnlockingPosition> {
         self.wasm()
             .query(
                 &self.vault_zapper_addr,
-                &QueryMsg::UnlockingPositions {
+                &QueryMsg::UserUnlockingPositionsForVault {
                     vault_address: self.vault_addr(),
                     owner: owner.to_string(),
                 },
@@ -403,7 +406,7 @@ impl<'a> VaultZapperRobot<'a> {
         owner: &str,
         expected: &[UnlockingPosition],
     ) -> &Self {
-        let unlocking_positions = self.zapper_query_unlocking_positions(owner);
+        let unlocking_positions = self.zapper_query_user_unlocking_positions_for_vault(owner);
         assert_eq!(unlocking_positions, expected);
         self
     }

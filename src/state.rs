@@ -7,12 +7,9 @@ use liquidity_helper::LiquidityHelper;
 pub const ROUTER: Item<CwDexRouter> = Item::new("router");
 pub const LIQUIDITY_HELPER: Item<LiquidityHelper> = Item::new("liquidity_helper");
 
-pub const LOCKUP_IDS: Map<Addr, Vec<u64>> = Map::new("lockup_ids");
+pub const LOCKUP_IDS: Map<(Addr, Addr), Vec<u64>> = Map::new("lockup_ids");
 
-// I'm not aware of any way to send data to our own reply entrypoint, so we must
-// save the caller of ExecuteMsg::Unlock here to be able to fetch it in the
-// reply entrypoint...
-pub const TEMP_UNLOCK_CALLER: Item<Addr> = Item::new("temp_unlock_caller");
+pub const TEMP_LOCK_KEY: Item<(Addr, Addr)> = Item::new("temp_lock_key");
 
 pub struct WithdrawMsg {
     pub msg: WasmMsg,

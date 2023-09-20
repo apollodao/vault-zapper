@@ -49,7 +49,8 @@ pub fn execute_withdraw_unlocked(
     min_out: AssetList,
 ) -> Result<Response, ContractError> {
     // Load users lockup IDs.
-    let mut lock_ids = LOCKUP_IDS.load(deps.storage, info.sender.clone())?;
+    let mut lock_ids =
+        LOCKUP_IDS.load(deps.storage, (info.sender.clone(), vault_address.clone()))?;
 
     // Check if lockup ID is valid.
     if !lock_ids.contains(&lockup_id) {
@@ -58,7 +59,11 @@ pub fn execute_withdraw_unlocked(
 
     // Remove lockup ID from users lockup IDs.
     lock_ids.retain(|x| *x != lockup_id);
-    LOCKUP_IDS.save(deps.storage, info.sender.clone(), &lock_ids)?;
+    LOCKUP_IDS.save(
+        deps.storage,
+        (info.sender.clone(), vault_address.clone()),
+        &lock_ids,
+    )?;
 
     // Proceed with normal withdraw
     withdraw(

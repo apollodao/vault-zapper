@@ -3,6 +3,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
+use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use liquidity_helper::LiquidityHelperUnchecked;
 
 #[cw_serde]
@@ -13,6 +14,7 @@ pub struct InstantiateMsg {
 
 #[cw_serde]
 pub enum ExecuteMsg {
+    /// Deposit assets into a vault
     Deposit {
         /// The assets to deposit
         assets: AssetListUnchecked,
@@ -37,17 +39,27 @@ pub enum ExecuteMsg {
         /// received is less than this, the transaction will fail.
         min_out: AssetListUnchecked,
     },
+    /// Call unlock on the specified vault and burn the sent vault tokens to
+    /// create an unlocking position. The unlocking position can be withdrawn from
+    /// after the unlock period has passed by calling WithdrawUnlocked.
     Unlock {
+        /// The address of the vault to call unlock on
         vault_address: String,
     },
     WithdrawUnlocked {
+        /// The address of the vault to withdraw from
         vault_address: String,
+        /// The ID of the unlocking position to withdraw from
         lockup_id: u64,
+        /// The recipient of the withdrawn assets
         recipient: Option<String>,
         /// The choice of which asset(s) to receive
         receive_choice: ReceiveChoice,
+        /// The minimum amount of assets to receive. If the amount of assets
+        /// received is less than this, the transaction will fail.
         min_out: AssetListUnchecked,
     },
+    /// Messages that can only be called by the contract itself.
     Callback(CallbackMsg),
 }
 
@@ -124,10 +136,20 @@ pub enum QueryMsg {
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these
     /// positions if they have finished unlocking by calling
     /// WithdrawUnlocked.
-    #[returns(Vec<cw_vault_standard::extensions::lockup::UnlockingPosition>)]
-    UnlockingPositions {
-        vault_address: String,
+    #[returns(Vec<UnlockingPosition>)]
+    UserUnlockingPositionsForVault {
         owner: String,
+        vault_address: String,
+    },
+
+    /// Returns Vec<UnlockingPositionsPerVault>. The user may withdraw from
+    /// these positions if they have finished unlocking by calling
+    /// WithdrawUnlocked.
+    #[returns(Vec<UnlockingPositionsPerVault>)]
+    UserUnlockingPositions {
+        owner: String,
+        start_after_vault_addr: Option<String>,
+        limit: Option<u32>,
     },
 }
 
@@ -146,4 +168,10 @@ pub enum ReceiveChoice {
     Underlying,
     /// Swap the base token to the specified asset
     SwapTo(AssetInfo),
+}
+
+#[cw_serde]
+pub struct UnlockingPositionsPerVault {
+    pub vault_address: Addr,
+    pub unlocking_positions: Vec<UnlockingPosition>,
 }
