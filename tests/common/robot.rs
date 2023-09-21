@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 
+use super::DENOM_CREATION_FEE;
 use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked};
 use apollo_utils::assets::separate_natives_and_cw20s;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{assert_approx_eq, coin, Coin, Coins, Decimal, Uint128};
+use cosmwasm_std::{assert_approx_eq, coin, Addr, Coin, Coins, Decimal, Uint128};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use cw_it::astroport::robot::AstroportTestRobot;
@@ -27,8 +29,6 @@ use cw_it::Artifact;
 pub const VAULT_ZAPPER_WASM_NAME: &str = "vault_zapper.wasm";
 pub const ASTROPORT_ARTIFACTS_DIR: &str = "astroport-artifacts";
 pub const ASTROPORT_LIQUIDITY_HELPER_WASM_NAME: &str = "astroport_liquidity_helper.wasm";
-/// The fee you need to pay to create a new denom with Token Factory.
-pub const DENOM_CREATION_FEE: &str = "10000000uosmo";
 
 #[cw_serde]
 struct AstroportLiquidityHelperInstantiateMsg {
@@ -37,7 +37,7 @@ struct AstroportLiquidityHelperInstantiateMsg {
 
 /// The default coins to fund new accounts with
 pub const DEFAULT_COINS: &str =
-    "1000000000000000000uosmo,1000000000000000000untrn,1000000000000000000uaxl,1000000000000000000uastro";
+    "1000000000000000000uosmo,1000000000000000000untrn,1000000000000000000uaxl,1000000000000000000uastro,1000000000000000000ueth,1000000000000000000uwsteth,1000000000000000000uusdc";
 pub enum VaultRobot<'a> {
     // Osmosis(OsmosisVaultRobot), //TODO: add osmosis vault robot
     Astroport(LockedAstroportVaultRobot<'a>),
@@ -154,7 +154,7 @@ impl<'a> VaultZapperRobot<'a> {
                 signer,
             );
 
-        let testa = VaultZapperDependencies {
+        let deps = VaultZapperDependencies {
             astroport_contracts: vault_dependencies.astroport_contracts,
             cw_dex_router_robot: vault_dependencies.cw_dex_router_robot,
             liquidity_helper_addr: vault_dependencies.liquidity_helper_addr,
@@ -162,7 +162,7 @@ impl<'a> VaultZapperRobot<'a> {
             pool_assets: axl_ntrn_pool.pool_assets.clone(),
             vault_pool: Pool::Astroport(axl_ntrn_pool),
         };
-        testa
+        deps
     }
 
     /// Creates a new `VaultZapperRobot` by uploading and instantiating the
@@ -210,11 +210,12 @@ impl<'a> VaultZapperRobot<'a> {
         }
     }
 
-    /// Deposit assets into the vault via the vault zapper
-    pub fn zapper_deposit(
+    /// Deposit assets into the specified vault via the vault zapper
+    pub fn zapper_deposit_to_vault(
         &self,
         assets: AssetList,
         recipient: Option<String>,
+        vault_addr: &str,
         min_out: Uint128,
         unwrap_choice: Unwrap,
         signer: &SigningAccount,
@@ -234,7 +235,7 @@ impl<'a> VaultZapperRobot<'a> {
             &self.vault_zapper_addr,
             &ExecuteMsg::Deposit {
                 assets: assets.into(),
-                vault_address: self.deps.vault_robot.vault_addr(),
+                vault_address: vault_addr.to_string(),
                 recipient,
                 min_out,
             },
@@ -243,6 +244,25 @@ impl<'a> VaultZapperRobot<'a> {
         ));
 
         self
+    }
+
+    /// Deposit assets into the vault via the vault zapper
+    pub fn zapper_deposit(
+        &self,
+        assets: AssetList,
+        recipient: Option<String>,
+        min_out: Uint128,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        self.zapper_deposit_to_vault(
+            assets,
+            recipient,
+            &self.deps.vault_robot.vault_addr(),
+            min_out,
+            unwrap_choice,
+            signer,
+        )
     }
 
     /// Redeem the specified amount of vault tokens from the vault via the vault
@@ -290,6 +310,26 @@ impl<'a> VaultZapperRobot<'a> {
             unwrap_choice,
             signer,
         )
+    }
+
+    /// Call unlock on the specified vault via the vault zapper
+    pub fn zapper_unlock_from_vault(
+        &self,
+        vault_addr: &str,
+        funds: &[Coin],
+        signer: &SigningAccount,
+    ) -> &Self {
+        self.wasm()
+            .execute(
+                &self.vault_zapper_addr,
+                &ExecuteMsg::Unlock {
+                    vault_address: vault_addr.to_string(),
+                },
+                funds,
+                signer,
+            )
+            .unwrap();
+        self
     }
 
     /// Unlock the vault via the vault zapper
@@ -374,6 +414,8 @@ impl<'a> VaultZapperRobot<'a> {
     pub fn zapper_query_user_unlocking_positions_for_vault(
         &self,
         owner: &str,
+        start_after_id: Option<u64>,
+        limit: Option<u32>,
     ) -> Vec<UnlockingPosition> {
         self.wasm()
             .query(
@@ -381,6 +423,29 @@ impl<'a> VaultZapperRobot<'a> {
                 &QueryMsg::UserUnlockingPositionsForVault {
                     vault_address: self.vault_addr(),
                     owner: owner.to_string(),
+                    start_after_id,
+                    limit,
+                },
+            )
+            .unwrap()
+    }
+
+    /// Queries the unlocking positions for a user across all vaults
+    pub fn zapper_query_user_unlocking_positions(
+        &self,
+        owner: &str,
+        start_after_vault_addr: Option<String>,
+        start_after_id: Option<u64>,
+        limit: Option<u32>,
+    ) -> HashMap<Addr, Vec<UnlockingPosition>> {
+        self.wasm()
+            .query(
+                &self.vault_zapper_addr,
+                &QueryMsg::UserUnlockingPositions {
+                    owner: owner.to_string(),
+                    start_after_vault_addr,
+                    start_after_id,
+                    limit,
                 },
             )
             .unwrap()
@@ -406,7 +471,8 @@ impl<'a> VaultZapperRobot<'a> {
         owner: &str,
         expected: &[UnlockingPosition],
     ) -> &Self {
-        let unlocking_positions = self.zapper_query_user_unlocking_positions_for_vault(owner);
+        let unlocking_positions =
+            self.zapper_query_user_unlocking_positions_for_vault(owner, None, None);
         assert_eq!(unlocking_positions, expected);
         self
     }

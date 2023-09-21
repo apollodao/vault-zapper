@@ -3,7 +3,6 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
-use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use liquidity_helper::LiquidityHelperUnchecked;
 
 #[cw_serde]
@@ -40,8 +39,8 @@ pub enum ExecuteMsg {
         min_out: AssetListUnchecked,
     },
     /// Call unlock on the specified vault and burn the sent vault tokens to
-    /// create an unlocking position. The unlocking position can be withdrawn from
-    /// after the unlock period has passed by calling WithdrawUnlocked.
+    /// create an unlocking position. The unlocking position can be withdrawn
+    /// from after the unlock period has passed by calling WithdrawUnlocked.
     Unlock {
         /// The address of the vault to call unlock on
         vault_address: String,
@@ -136,19 +135,22 @@ pub enum QueryMsg {
     /// Returns Vec<UnlockingPosition>. The user may withdraw from these
     /// positions if they have finished unlocking by calling
     /// WithdrawUnlocked.
-    #[returns(Vec<UnlockingPosition>)]
+    #[returns(Vec<cw_vault_standard::extensions::lockup::UnlockingPosition>)]
     UserUnlockingPositionsForVault {
         owner: String,
         vault_address: String,
+        start_after_id: Option<u64>,
+        limit: Option<u32>,
     },
 
     /// Returns Vec<UnlockingPositionsPerVault>. The user may withdraw from
     /// these positions if they have finished unlocking by calling
     /// WithdrawUnlocked.
-    #[returns(Vec<UnlockingPositionsPerVault>)]
+    #[returns(std::collections::HashMap<Addr, Vec<cw_vault_standard::extensions::lockup::UnlockingPosition>>)]
     UserUnlockingPositions {
         owner: String,
         start_after_vault_addr: Option<String>,
+        start_after_id: Option<u64>,
         limit: Option<u32>,
     },
 }
@@ -168,10 +170,4 @@ pub enum ReceiveChoice {
     Underlying,
     /// Swap the base token to the specified asset
     SwapTo(AssetInfo),
-}
-
-#[cw_serde]
-pub struct UnlockingPositionsPerVault {
-    pub vault_address: Addr,
-    pub unlocking_positions: Vec<UnlockingPosition>,
 }

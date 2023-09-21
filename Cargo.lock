@@ -3397,7 +3397,7 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "vault-zapper"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 dependencies = [
  "apollo-cw-asset",
  "apollo-utils",
@@ -3414,6 +3414,7 @@ dependencies = [
  "cw2 1.1.0",
  "cw20 1.1.0",
  "liquidity-helper 0.1.0",
+ "locked-astroport-vault",
  "locked-astroport-vault-test-helpers",
  "test-case",
  "thiserror",

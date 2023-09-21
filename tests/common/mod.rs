@@ -12,6 +12,7 @@ use cw_it::osmosis_test_tube::OsmosisTestApp;
 pub const UNOPTIMIZED_PATH: &str = "target/wasm32-unknown-unknown/release";
 pub const DEPENDENCY_ARTIFACTS_DIR: &str = "tests/test_artifacts";
 
+/// The fee you need to pay to create a new denom with Token Factory.
 pub const DENOM_CREATION_FEE: &str = "10000000uosmo";
 
 pub const TOKEN_FACTORY: &TokenFactory =

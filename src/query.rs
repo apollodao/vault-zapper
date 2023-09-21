@@ -1,16 +1,16 @@
+use std::collections::HashMap;
+
 use apollo_cw_asset::AssetInfo;
 use cosmwasm_std::{Addr, Deps, Empty, Env, Order, StdError, StdResult};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
 use cw_storage_plus::Bound;
 
-use crate::msg::{ReceiveChoice, UnlockingPositionsPerVault};
-use crate::state::{LOCKUP_IDS, ROUTER};
+use crate::msg::ReceiveChoice;
+use crate::state::{self, DEFAULT_LIMIT, LOCKUP_IDS, ROUTER};
 
 use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cw_vault_standard::{ExtensionQueryMsg, VaultContract, VaultStandardQueryMsg};
-
-const DEFAULT_LIMIT: u32 = 10;
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
@@ -124,27 +124,34 @@ pub fn query_user_unlocking_positions_for_vault(
     deps: Deps,
     env: Env,
     vault_address: Addr,
+    start_after_id: Option<u64>,
+    limit: Option<u32>,
     user: Addr,
 ) -> StdResult<Vec<UnlockingPosition>> {
-    let mut user_lockup_ids = LOCKUP_IDS
-        .may_load(deps.storage, (user, vault_address.clone()))?
-        .unwrap_or_default();
-    user_lockup_ids.sort();
-    let mut unlocking_positions: Vec<UnlockingPosition> = deps.querier.query_wasm_smart(
-        vault_address,
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
-            LockupQueryMsg::UnlockingPositions {
-                owner: env.contract.address.to_string(),
-                start_after: if !user_lockup_ids.is_empty() && user_lockup_ids[0] > 0 {
-                    Some(user_lockup_ids[0] - 1)
-                } else {
-                    None
-                },
-                limit: None,
-            },
-        )),
-    )?;
-    unlocking_positions.retain(|p| user_lockup_ids.contains(&p.id));
+    let limit = limit.unwrap_or(DEFAULT_LIMIT) as usize;
+    let start: Option<Bound<u64>> = start_after_id.map(Bound::exclusive);
+
+    let user_lockup_ids = LOCKUP_IDS
+        .prefix((user, vault_address.clone()))
+        .range(deps.storage, start, None, Order::Ascending)
+        .take(limit);
+
+    let mut unlocking_positions: Vec<UnlockingPosition> = vec![];
+
+    for res in user_lockup_ids {
+        let (lockup_id, _) = res?;
+
+        let unlocking_position = deps.querier.query_wasm_smart::<UnlockingPosition>(
+            &vault_address,
+            &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
+                LockupQueryMsg::UnlockingPosition { lockup_id },
+            )),
+        )?;
+
+        if unlocking_position.owner == env.contract.address {
+            unlocking_positions.push(unlocking_position);
+        }
+    }
     Ok(unlocking_positions)
 }
 
@@ -153,46 +160,37 @@ pub fn query_all_user_unlocking_positions(
     env: Env,
     user: Addr,
     start_after_vault_addr: Option<String>,
+    start_after_id: Option<u64>,
     limit: Option<u32>,
-) -> StdResult<Vec<UnlockingPositionsPerVault>> {
-    let limit = limit.unwrap_or(DEFAULT_LIMIT) as usize;
-    let start: Option<Bound<Addr>> = start_after_vault_addr
-        .map(|x| deps.api.addr_validate(&x))
-        .transpose()?
-        .map(Bound::exclusive);
+) -> StdResult<HashMap<Addr, Vec<UnlockingPosition>>> {
+    let user_lockup_ids = state::paginate_all_user_unlocking_positions(
+        deps,
+        user,
+        start_after_vault_addr,
+        start_after_id,
+        limit,
+    )?;
 
-    let user_lockup_ids_per_vault = LOCKUP_IDS
-        .prefix(user)
-        .range(deps.storage, start, None, Order::Ascending)
-        .take(limit)
-        .into_iter();
+    let mut unlocking_positions_per_vault: HashMap<Addr, Vec<UnlockingPosition>> = HashMap::new();
 
-    let mut positions_per_vault: Vec<UnlockingPositionsPerVault> = vec![];
+    for item in user_lockup_ids {
+        let ((vault_address, lockup_id), _) = item?;
 
-    for item in user_lockup_ids_per_vault {
-        let (vault_address, mut user_lockup_ids) = item?;
-
-        user_lockup_ids.sort();
-        let mut unlocking_positions: Vec<UnlockingPosition> = deps.querier.query_wasm_smart(
+        let unlocking_position = deps.querier.query_wasm_smart::<UnlockingPosition>(
             &vault_address,
             &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
-                LockupQueryMsg::UnlockingPositions {
-                    owner: env.contract.address.to_string(),
-                    start_after: if !user_lockup_ids.is_empty() && user_lockup_ids[0] > 0 {
-                        Some(user_lockup_ids[0] - 1)
-                    } else {
-                        None
-                    },
-                    limit: None,
-                },
+                LockupQueryMsg::UnlockingPosition { lockup_id },
             )),
         )?;
-        unlocking_positions.retain(|p| user_lockup_ids.contains(&p.id));
 
-        positions_per_vault.push(UnlockingPositionsPerVault {
-            vault_address,
-            unlocking_positions,
-        });
+        if unlocking_position.owner == env.contract.address {
+            if let Some(positions) = unlocking_positions_per_vault.get_mut(&vault_address) {
+                positions.push(unlocking_position);
+            } else {
+                unlocking_positions_per_vault.insert(vault_address, vec![unlocking_position]);
+            }
+        }
     }
-    Ok(positions_per_vault)
+
+    Ok(unlocking_positions_per_vault)
 }

@@ -200,21 +200,27 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::UserUnlockingPositionsForVault {
             vault_address,
             owner,
+            start_after_id,
+            limit,
         } => to_binary(&query_user_unlocking_positions_for_vault(
             deps,
             env,
             deps.api.addr_validate(&vault_address)?,
+            start_after_id,
+            limit,
             deps.api.addr_validate(&owner)?,
         )?),
         QueryMsg::UserUnlockingPositions {
             owner,
             start_after_vault_addr,
+            start_after_id,
             limit,
         } => to_binary(&query_all_user_unlocking_positions(
             deps,
             env,
             deps.api.addr_validate(&owner)?,
             start_after_vault_addr,
+            start_after_id,
             limit,
         )?),
     }
@@ -238,17 +244,10 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
             )?;
 
             // Read temporarily stored caller address and vault address
-            let key = TEMP_LOCK_KEY.load(deps.storage)?;
-
-            //Read users lock Ids.
-            let mut lock_ids = LOCKUP_IDS
-                .load(deps.storage, key.clone())
-                .unwrap_or_default();
-
-            lock_ids.push(lockup_id);
+            let (user, vault) = TEMP_LOCK_KEY.load(deps.storage)?;
 
             // Store lockup_id
-            LOCKUP_IDS.save(deps.storage, key, &lock_ids)?;
+            LOCKUP_IDS.save(deps.storage, (user, vault, lockup_id), &())?;
 
             //Erase temp key
             TEMP_LOCK_KEY.remove(deps.storage);
