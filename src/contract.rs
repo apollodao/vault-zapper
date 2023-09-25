@@ -142,19 +142,11 @@ pub fn execute(
                     deposit_asset_info,
                 ),
                 CallbackMsg::EnforceMinOut {
-                    asset,
+                    assets,
                     recipient,
-                    balance_before,
+                    balances_before,
                     min_out,
-                } => callback_enforce_min_out(
-                    deps,
-                    env,
-                    info,
-                    asset,
-                    recipient,
-                    balance_before,
-                    min_out,
-                ),
+                } => callback_enforce_min_out(deps, assets, recipient, balances_before, min_out),
                 CallbackMsg::AfterRedeem {
                     receive_choice,
                     vault_base_token,
@@ -172,15 +164,7 @@ pub fn execute(
                     assets,
                     receive_choice,
                     recipient,
-                    min_out,
-                } => callback_after_withdraw_liq(
-                    deps,
-                    env,
-                    assets,
-                    receive_choice,
-                    recipient,
-                    min_out,
-                ),
+                } => callback_after_withdraw_liq(deps, env, assets, receive_choice, recipient),
             }
         }
     }

@@ -1,7 +1,7 @@
-use apollo_cw_asset::{AssetInfo, AssetList};
+use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Binary, Coin, DepsMut, Empty, Env, MessageInfo, Response, Uint128,
+    to_binary, Addr, Binary, Coin, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
@@ -16,7 +16,7 @@ pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    caller_funds: AssetList,
+    assets: AssetList,
     vault_address: Addr,
     recipient: Option<String>,
     min_out: Uint128,
@@ -24,7 +24,7 @@ pub fn execute_deposit(
     // Unwrap recipient or use sender
     let recipient = recipient.map_or(Ok(info.sender.clone()), |x| deps.api.addr_validate(&x))?;
 
-    let receive_assets_res = receive_assets(&info, &env, &caller_funds)?;
+    let receive_assets_res = receive_assets(&info, &env, &assets)?;
 
     // Query the vault info to get the deposit asset
     let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
@@ -37,25 +37,33 @@ pub fn execute_deposit(
     let vault_token = AssetInfo::native(&vault.vault_token);
     let balance_before = vault_token.query_balance(&deps.querier, recipient.clone())?;
     let enforce_min_out_msg = CallbackMsg::EnforceMinOut {
-        asset: vault_token,
+        assets: vec![vault_token.clone()],
         recipient: recipient.clone(),
-        balance_before,
-        min_out,
+        balances_before: vec![Asset::new(vault_token.clone(), balance_before)].into(),
+        min_out: vec![Asset::new(vault_token.clone(), min_out)].into(),
     }
     .into_cosmos_msg(&env)?;
 
+    let event = Event::new("apollo/vault-zapper/execute_deposit")
+        .add_attribute("assets", assets.to_string())
+        .add_attribute("vault_address", &vault_address)
+        .add_attribute("recipient", &recipient)
+        .add_attribute("min_out", min_out);
+
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if caller_funds.len() == 1 && caller_funds.to_vec()[0].info == deposit_asset_info {
-        let amount = caller_funds.to_vec()[0].amount;
+    if assets.len() == 1 && assets.to_vec()[0].info == deposit_asset_info {
+        let amount = assets.to_vec()[0].amount;
         let msgs = vault.increase_allowance_and_deposit(
             amount,
             &deposit_asset_info,
             Some(recipient.to_string()),
         )?;
+
         return Ok(receive_assets_res
             .add_messages(msgs)
-            .add_message(enforce_min_out_msg));
+            .add_message(enforce_min_out_msg)
+            .add_event(event));
     }
 
     //Check if the depositable asset is an LP token
@@ -80,7 +88,7 @@ pub fn execute_deposit(
 
     // Basket Liquidate deposited coins
     // We only liquidate the coins that are not already the target asset
-    let liquidate_coins = caller_funds
+    let liquidate_coins = assets
         .into_iter()
         .filter_map(|a| {
             if !receive_asset_infos.contains(&a.info) {
@@ -125,7 +133,8 @@ pub fn execute_deposit(
 
     Ok(receive_assets_res
         .add_messages(msgs)
-        .add_message(enforce_min_out_msg))
+        .add_message(enforce_min_out_msg)
+        .add_event(event))
 }
 
 pub fn callback_provide_liquidity(
@@ -198,22 +207,39 @@ pub fn callback_deposit(
 
 pub fn callback_enforce_min_out(
     deps: DepsMut,
-    _env: Env,
-    _info: MessageInfo,
-    asset: AssetInfo,
+    assets: Vec<AssetInfo>,
     recipient: Addr,
-    balance_before: Uint128,
-    min_out: Uint128,
+    balances_before: AssetList,
+    min_out: AssetList,
 ) -> Result<Response, ContractError> {
-    let new_balance = asset.query_balance(&deps.querier, recipient)?;
-    let diff = new_balance.saturating_sub(balance_before);
+    let mut new_balances =
+        AssetList::query_asset_info_balances(assets.clone(), &deps.querier, &recipient)?;
+    let assets_received = new_balances.deduct_many(&balances_before)?;
 
-    if diff < min_out {
-        return Err(ContractError::MinOutNotMet {
-            min_out,
-            actual: diff,
-        });
+    for asset in min_out.iter() {
+        let received = assets_received
+            .find(&asset.info)
+            .map(|x| x.amount)
+            .unwrap_or_default();
+        if received < asset.amount {
+            return Err(ContractError::MinOutNotMet {
+                min_out: asset.amount,
+                actual: received,
+            });
+        }
     }
 
-    Ok(Response::new())
+    let mut event = Event::new("apollo/vault-zapper/callback_enforce_min_out")
+        .add_attribute("recipient", recipient);
+    if !assets.is_empty() {
+        event = event.add_attribute("assets", format!("{:?}", assets));
+    }
+    if min_out.len() > 0 {
+        event = event.add_attribute("min_out", format!("{:?}", min_out));
+    }
+    if assets_received.len() > 0 {
+        event = event.add_attribute("assets_received", format!("{:?}", assets_received));
+    }
+
+    Ok(Response::new().add_event(event))
 }

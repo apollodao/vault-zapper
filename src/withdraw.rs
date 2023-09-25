@@ -1,6 +1,7 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, Response, Uint128, WasmMsg,
+    to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
@@ -12,6 +13,7 @@ use crate::msg::{CallbackMsg, ReceiveChoice};
 use crate::state::{LOCKUP_IDS, ROUTER};
 use crate::ContractError;
 
+#[cw_serde]
 pub enum RedeemType {
     Normal,
     Lockup(u64),
@@ -117,15 +119,27 @@ pub fn withdraw(
         }),
     };
 
-    Ok(Response::new().add_message(withdraw_msg).add_message(
-        CallbackMsg::AfterRedeem {
-            receive_choice,
-            vault_base_token,
-            recipient,
-            min_out,
-        }
-        .into_cosmos_msg(&env)?,
-    ))
+    let mut event = Event::new("apollo/vault-zapper/withdraw")
+        .add_attribute("vault_address", &vault_address)
+        .add_attribute("recipient", &recipient)
+        .add_attribute("receive_choice", format!("{:?}", receive_choice))
+        .add_attribute("withdraw_type", format!("{:?}", withdraw_type));
+    if min_out.len() > 0 {
+        event = event.add_attribute("min_out", min_out.to_string());
+    }
+
+    Ok(Response::new()
+        .add_message(withdraw_msg)
+        .add_message(
+            CallbackMsg::AfterRedeem {
+                receive_choice,
+                vault_base_token,
+                recipient,
+                min_out,
+            }
+            .into_cosmos_msg(&env)?,
+        )
+        .add_event(event))
 }
 
 pub fn callback_after_redeem(
@@ -144,65 +158,88 @@ pub fn callback_after_redeem(
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_base_token).ok();
 
     // Check requested withdrawal assets
-    match &receive_choice {
+    let (res, withdrawal_assets) = match &receive_choice {
         ReceiveChoice::SwapTo(requested_asset) => {
             // If the requested denom is the same as the vaults withdrawal asset, just send
             // it to the recipient.
             if requested_asset == &vault_base_token {
-                return Ok(Response::new().add_message(base_token.transfer_msg(recipient)?));
-            }
-
-            // Check if the withdrawable asset is an LP token.
-            let router = ROUTER.load(deps.storage)?;
-
-            if let Some(pool) = pool {
-                // Add messages to withdraw liquidity
-                let withdraw_liq_res =
-                    pool.withdraw_liquidity(deps.as_ref(), &env, base_token, AssetList::new())?;
-                Ok(withdraw_liq_res.add_message(
-                    CallbackMsg::AfterWithdrawLiq {
-                        assets: pool.pool_assets(deps.as_ref())?,
-                        receive_choice,
-                        recipient,
-                        min_out,
-                    }
-                    .into_cosmos_msg(&env)?,
+                Ok((
+                    Response::new().add_message(base_token.transfer_msg(&recipient)?),
+                    vec![base_token.info],
                 ))
             } else {
-                // Basket liquidate the asset withdrawn from the vault
-                let min_out = unwrap_min_out(min_out, requested_asset)?;
-                let msgs = router.basket_liquidate_msgs(
-                    vec![base_token].into(),
-                    requested_asset,
-                    Some(min_out),
-                    Some(recipient.to_string()),
-                )?;
-                Ok(Response::new().add_messages(msgs))
+                // Check if the withdrawable asset is an LP token.
+                let router = ROUTER.load(deps.storage)?;
+
+                if let Some(pool) = pool {
+                    // Add messages to withdraw liquidity
+                    let withdraw_liq_res =
+                        pool.withdraw_liquidity(deps.as_ref(), &env, base_token, AssetList::new())?;
+                    Ok((
+                        withdraw_liq_res.add_message(
+                            CallbackMsg::AfterWithdrawLiq {
+                                assets: pool.pool_assets(deps.as_ref())?,
+                                receive_choice: receive_choice.clone(),
+                                recipient: recipient.clone(),
+                            }
+                            .into_cosmos_msg(&env)?,
+                        ),
+                        vec![requested_asset.clone()],
+                    ))
+                } else {
+                    // Basket liquidate the asset withdrawn from the vault
+                    let msgs = router.basket_liquidate_msgs(
+                        vec![base_token].into(),
+                        requested_asset,
+                        None, // Not needed as we have our own min_out enforcement
+                        Some(recipient.to_string()),
+                    )?;
+                    Ok((
+                        Response::new().add_messages(msgs),
+                        vec![requested_asset.clone()],
+                    ))
+                }
             }
         }
-        ReceiveChoice::BaseToken => {
-            Ok(Response::new().add_message(base_token.transfer_msg(recipient)?))
-        }
+        ReceiveChoice::BaseToken => Ok((
+            Response::new().add_message(base_token.transfer_msg(&recipient)?),
+            vec![base_token.info.clone()],
+        )),
         ReceiveChoice::Underlying => {
             if let Some(pool) = pool {
                 let pool_assets = pool.pool_assets(deps.as_ref())?;
 
                 let res =
                     pool.withdraw_liquidity(deps.as_ref(), &env, base_token, AssetList::new())?;
-                Ok(res.add_message(
-                    CallbackMsg::AfterWithdrawLiq {
-                        assets: pool_assets,
-                        receive_choice,
-                        recipient,
-                        min_out,
-                    }
-                    .into_cosmos_msg(&env)?,
+                Ok((
+                    res.add_message(
+                        CallbackMsg::AfterWithdrawLiq {
+                            assets: pool_assets.clone(),
+                            receive_choice,
+                            recipient: recipient.clone(),
+                        }
+                        .into_cosmos_msg(&env)?,
+                    ),
+                    pool_assets,
                 ))
             } else {
                 Err(ContractError::UnsupportedWithdrawal {})
             }
         }
+    }?;
+
+    // Add a message to enforce the minimum amount of assets received
+    let balances_before =
+        AssetList::query_asset_info_balances(withdrawal_assets.clone(), &deps.querier, &recipient)?;
+    let enforce_min_out_msg = CallbackMsg::EnforceMinOut {
+        assets: withdrawal_assets,
+        recipient: recipient.clone(),
+        balances_before,
+        min_out: min_out.clone(),
     }
+    .into_cosmos_msg(&env)?;
+
+    Ok(res.add_message(enforce_min_out_msg))
 }
 
 pub fn callback_after_withdraw_liq(
@@ -211,7 +248,6 @@ pub fn callback_after_withdraw_liq(
     assets: Vec<AssetInfo>,
     receive_choice: ReceiveChoice,
     recipient: Addr,
-    min_out: AssetList,
 ) -> Result<Response, ContractError> {
     let router = ROUTER.load(deps.storage)?;
 
@@ -220,13 +256,9 @@ pub fn callback_after_withdraw_liq(
 
     match receive_choice {
         ReceiveChoice::SwapTo(requested_asset) => {
-            let min_out = unwrap_min_out(min_out, &requested_asset)?;
-            // Subtract the requested asset balance from min_out, as we will
-            // transfer this amount to the recipient.
             let requested_asset_balance = asset_balances
                 .find(&requested_asset)
                 .map_or(Uint128::zero(), |x| x.amount);
-            let min_out = min_out.saturating_sub(requested_asset_balance);
 
             // Add messages to basket liquidate the assets withdrawn from the LP, but filter
             // out the requested asset as we can't swap an asset to itself.
@@ -238,7 +270,7 @@ pub fn callback_after_withdraw_liq(
                     .collect::<Vec<_>>()
                     .into(),
                 &requested_asset,
-                Some(min_out),
+                None, // Not needed as we have our own min_out enforcement
                 Some(recipient.to_string()),
             )?;
 
@@ -253,46 +285,11 @@ pub fn callback_after_withdraw_liq(
             Ok(Response::new().add_messages(msgs))
         }
         ReceiveChoice::Underlying => {
-            // Verify min_out and then just send the assets to the recipient
-            for min_asset in min_out.into_iter() {
-                if asset_balances
-                    .find(&min_asset.info)
-                    .map(|x| x.amount)
-                    .unwrap_or_default()
-                    < min_asset.amount
-                {
-                    return Err(ContractError::MinOutNotMet {
-                        min_out: min_asset.amount,
-                        actual: asset_balances
-                            .find(&min_asset.info)
-                            .map(|x| x.amount)
-                            .unwrap_or_default(),
-                    });
-                }
-            }
-
             let msgs = asset_balances.transfer_msgs(recipient)?;
             Ok(Response::new().add_messages(msgs))
         }
         ReceiveChoice::BaseToken => {
             panic!("Should not be possible to receive base token from callback_after_withdraw_liq")
         }
-    }
-}
-
-/// Unwraps a single asset amount from an AssetList.
-fn unwrap_min_out(
-    min_out: AssetList,
-    requested_asset: &AssetInfo,
-) -> Result<Uint128, ContractError> {
-    // Since we are requesting a single asset out, make sure the min_out argument
-    // contains the requested asset.
-    if min_out.len() > 1 || (min_out.len() == 1 && &min_out.to_vec()[0].info != requested_asset) {
-        return Err(ContractError::InvalidMinOut {});
-    }
-    if min_out.len() == 1 {
-        Ok(min_out.to_vec()[0].amount)
-    } else {
-        Ok(Uint128::zero())
     }
 }

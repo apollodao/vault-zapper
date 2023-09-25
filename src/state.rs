@@ -299,7 +299,6 @@ mod tests {
         .unwrap()
         .map(|x| x.unwrap().0)
         .collect();
-        println!("{:?}", res);
         assert_eq!(res.len(), 3);
         assert_eq!(
             res,

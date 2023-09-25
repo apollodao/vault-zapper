@@ -1,4 +1,4 @@
-use apollo_cw_asset::{Asset, AssetInfo, AssetList};
+use apollo_cw_asset::{Asset, AssetInfo, AssetList, AssetUnchecked};
 use common::setup;
 use cosmwasm_std::{Decimal, Uint128};
 use cw_dex::traits::Pool;
@@ -12,9 +12,11 @@ use vault_zapper::msg::ReceiveChoice;
 
 pub mod common;
 
-#[test_case(0; "no lock")]
-#[test_case(300; "with lockup")]
-fn withdraw_base_token(lock_duration: u64) {
+#[test_case(0, true; "no lock, via ReceiveChoice::SwapTo")]
+#[test_case(0, false; "no lock, via ReceiveChoice::BaseToken")]
+#[test_case(300, true; "with lockup, via ReceiveChoice::SwapTo")]
+#[test_case(300, false; "with lockup, via ReceiveChoice::BaseToken")]
+fn withdraw_base_token(lock_duration: u64, via_swap_to: bool) {
     let owned_runner: OwnedTestRunner = common::get_test_runner();
     let runner = owned_runner.as_ref();
     let (robot, admin) = setup(&runner, lock_duration);
@@ -36,9 +38,33 @@ fn withdraw_base_token(lock_duration: u64) {
         .assert_vault_token_balance_gt(admin.address(), 0u128)
         .assert_base_token_balance_eq(admin.address(), balance - deposit_amount);
 
-    let receive_choice = ReceiveChoice::SwapTo(deposit_asset_info);
+    let receive_choice = if via_swap_to {
+        ReceiveChoice::SwapTo(deposit_asset_info.clone())
+    } else {
+        ReceiveChoice::BaseToken
+    };
     if lock_duration == 0 {
-        robot.zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin);
+        robot
+            .zapper_redeem_all(
+                None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount + Uint128::new(1),
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_redeem_all(
+                None,
+                receive_choice,
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount,
+                )],
+                Unwrap::Ok,
+                &admin,
+            );
     } else {
         robot
             .zapper_unlock_all(&admin)
@@ -54,8 +80,22 @@ fn withdraw_base_token(lock_duration: u64) {
             .zapper_withdraw_unlocked(
                 0,
                 None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount + Uint128::new(1),
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_withdraw_unlocked(
+                0,
+                None,
                 receive_choice,
-                AssetList::new(),
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount,
+                )],
                 Unwrap::Ok,
                 &admin,
             );
@@ -98,7 +138,26 @@ fn withdraw_one_asset_in_pool(lock_duration: u64) {
 
     let receive_choice = ReceiveChoice::SwapTo(deposit_asset_info.clone());
     if lock_duration == 0 {
-        robot.zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin);
+        robot.zapper_redeem_all(
+            None,
+            receive_choice.clone(),
+            vec![AssetUnchecked::new(
+                deposit_asset_info.clone().into(),
+                deposit_amount * (Decimal::one() - Decimal::permille(3)),
+            )],
+            Unwrap::Err("Minimum amount not met"),
+            &admin,
+        );
+        robot.zapper_redeem_all(
+            None,
+            receive_choice,
+            vec![AssetUnchecked::new(
+                deposit_asset_info.clone().into(),
+                deposit_amount * (Decimal::one() - Decimal::permille(4)),
+            )],
+            Unwrap::Ok,
+            &admin,
+        );
     } else {
         robot
             .zapper_unlock_all(&admin)
@@ -114,8 +173,22 @@ fn withdraw_one_asset_in_pool(lock_duration: u64) {
             .zapper_withdraw_unlocked(
                 0,
                 None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount * (Decimal::one() - Decimal::permille(3)),
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_withdraw_unlocked(
+                0,
+                None,
                 receive_choice,
-                AssetList::new(),
+                vec![AssetUnchecked::new(
+                    deposit_asset_info.clone().into(),
+                    deposit_amount * (Decimal::one() - Decimal::permille(4)),
+                )],
                 Unwrap::Ok,
                 &admin,
             );
@@ -243,7 +316,52 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
     let max_rel_diff = "0.000000001"; // One unit lost due to rounding
     if lock_duration == 0 {
         robot
-            .zapper_redeem_all(None, receive_choice, AssetList::new(), Unwrap::Ok, &admin)
+            .zapper_redeem_all(
+                None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    asset1.clone().into(),
+                    asset1_deposit_amount,
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_redeem_all(
+                None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    asset2.clone().into(),
+                    asset2_deposit_amount,
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_redeem_all(
+                None,
+                receive_choice.clone(),
+                vec![
+                    AssetUnchecked::new(asset1.clone().into(), asset1_deposit_amount),
+                    AssetUnchecked::new(asset2.clone().into(), asset2_deposit_amount),
+                ],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_redeem_all(
+                None,
+                receive_choice,
+                vec![
+                    AssetUnchecked::new(
+                        asset1.clone().into(),
+                        asset1_deposit_amount - Uint128::one(),
+                    ),
+                    AssetUnchecked::new(
+                        asset2.clone().into(),
+                        asset2_deposit_amount - Uint128::one(),
+                    ),
+                ],
+                Unwrap::Ok,
+                &admin,
+            )
             .assert_vault_token_balance_eq(admin.address(), 0u128);
     } else {
         robot
@@ -260,8 +378,50 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
             .zapper_withdraw_unlocked(
                 0,
                 None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    asset1.clone().into(),
+                    asset1_deposit_amount,
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice.clone(),
+                vec![AssetUnchecked::new(
+                    asset2.clone().into(),
+                    asset2_deposit_amount,
+                )],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_withdraw_unlocked(
+                0,
+                None,
+                receive_choice.clone(),
+                vec![
+                    AssetUnchecked::new(asset1.clone().into(), asset1_deposit_amount),
+                    AssetUnchecked::new(asset2.clone().into(), asset2_deposit_amount),
+                ],
+                Unwrap::Err("Minimum amount not met"),
+                &admin,
+            )
+            .zapper_withdraw_unlocked(
+                0,
+                None,
                 receive_choice,
-                AssetList::new(),
+                vec![
+                    AssetUnchecked::new(
+                        asset1.clone().into(),
+                        asset1_deposit_amount - Uint128::one(),
+                    ),
+                    AssetUnchecked::new(
+                        asset2.clone().into(),
+                        asset2_deposit_amount - Uint128::one(),
+                    ),
+                ],
                 Unwrap::Ok,
                 &admin,
             )

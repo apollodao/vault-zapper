@@ -81,17 +81,19 @@ pub enum CallbackMsg {
         recipient: Addr,
         deposit_asset_info: AssetInfo,
     },
-    /// Enforce that the minimum amount of vault tokens are received
+    /// Enforce that the minimum amount of the specified assets are sent to the
+    /// recipient after the transaction
     EnforceMinOut {
-        /// The asset to check the balance of
-        asset: AssetInfo,
+        /// The assets to check the balance of
+        assets: Vec<AssetInfo>,
         /// The address to check the balance of
         recipient: Addr,
-        /// The recipient's balance of `asset` before the transaction
-        balance_before: Uint128,
-        /// The minimum amount of `asset` to receive. If the amount of
-        /// `asset` received is less than this, the transaction will fail.
-        min_out: Uint128,
+        /// The recipient's balance of each of the assets before the transaction
+        balances_before: AssetList,
+        /// The minimum amount of each asset to receive. If the amount received
+        /// of any of the assets is less than this, the transaction will
+        /// fail.
+        min_out: AssetList,
     },
     /// Called after redeeming vault tokens
     AfterRedeem {
@@ -105,7 +107,6 @@ pub enum CallbackMsg {
         assets: Vec<AssetInfo>,
         receive_choice: ReceiveChoice,
         recipient: Addr,
-        min_out: AssetList,
     },
 }
 
