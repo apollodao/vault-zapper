@@ -45,7 +45,7 @@ pub fn execute_deposit(
     .into_cosmos_msg(&env)?;
 
     let event = Event::new("apollo/vault-zapper/execute_deposit")
-        .add_attribute("assets", assets.to_string())
+        .add_attribute("assets", to_binary(&assets)?.to_string())
         .add_attribute("vault_address", &vault_address)
         .add_attribute("recipient", &recipient)
         .add_attribute("min_out", min_out);
@@ -229,17 +229,11 @@ pub fn callback_enforce_min_out(
         }
     }
 
-    let mut event = Event::new("apollo/vault-zapper/callback_enforce_min_out")
-        .add_attribute("recipient", recipient);
-    if !assets.is_empty() {
-        event = event.add_attribute("assets", format!("{:?}", assets));
-    }
-    if min_out.len() > 0 {
-        event = event.add_attribute("min_out", format!("{:?}", min_out));
-    }
-    if assets_received.len() > 0 {
-        event = event.add_attribute("assets_received", format!("{:?}", assets_received));
-    }
+    let event = Event::new("apollo/vault-zapper/callback_enforce_min_out")
+        .add_attribute("recipient", recipient)
+        .add_attribute("assets", to_binary(&assets)?.to_string())
+        .add_attribute("min_out", to_binary(&min_out)?.to_string())
+        .add_attribute("assets_received", to_binary(&assets_received)?.to_string());
 
     Ok(Response::new().add_event(event))
 }

@@ -3397,7 +3397,7 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "vault-zapper"
-version = "0.1.0-rc.2"
+version = "0.1.0-rc.3"
 dependencies = [
  "apollo-cw-asset",
  "apollo-utils",

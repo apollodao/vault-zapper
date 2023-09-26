@@ -119,14 +119,12 @@ pub fn withdraw(
         }),
     };
 
-    let mut event = Event::new("apollo/vault-zapper/withdraw")
+    let event = Event::new("apollo/vault-zapper/withdraw")
         .add_attribute("vault_address", &vault_address)
         .add_attribute("recipient", &recipient)
-        .add_attribute("receive_choice", format!("{:?}", receive_choice))
-        .add_attribute("withdraw_type", format!("{:?}", withdraw_type));
-    if min_out.len() > 0 {
-        event = event.add_attribute("min_out", min_out.to_string());
-    }
+        .add_attribute("receive_choice", to_binary(&receive_choice)?.to_string())
+        .add_attribute("withdraw_type", to_binary(&withdraw_type)?.to_string())
+        .add_attribute("min_out", to_binary(&min_out)?.to_string());
 
     Ok(Response::new()
         .add_message(withdraw_msg)
