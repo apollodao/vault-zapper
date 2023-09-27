@@ -1,6 +1,6 @@
 [package]
 name    = "vault-zapper"
-version = "0.1.0-rc.3"
+version = "0.1.0"
 authors = ["Sturdy <sturdy@apollo.farm>"]
 edition = "2021"
 
@@ -27,24 +27,19 @@ incremental = false
 overflow-checks = true
 
 [features]
-default = ["astroport"]
+default = []
 # use library feature to disable all instantiate/execute/query exports
 library = []
 osmosis = ["cw-dex/osmosis"]
 astroport = ["cw-dex/astroport"]
 osmosis-test-tube = ["cw-it/osmosis-test-tube", "locked-astroport-vault-test-helpers/osmosis-test-tube"]
 
-[package.metadata.scripts]
-optimize = """docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.11
-"""
-optimize-arm64 = """docker run --rm -v "$(pwd)":/code \
---mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
---mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-cosmwasm/rust-optimizer-arm64:0.12.11
-"""
+
+[package.metadata.optimizer]
+builds = [
+  { name = "astroport", features = ["astroport"] },
+  { name = "osmosis", features = ["osmosis"] },
+]
 
 [dependencies]
 apollo-utils                        = "0.1.1"
