@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use super::DENOM_CREATION_FEE;
-use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked};
+use apollo_cw_asset::{Asset, AssetInfo, AssetList, AssetListUnchecked};
 use apollo_utils::assets::separate_natives_and_cw20s;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{assert_approx_eq, coin, Addr, Coin, Coins, Decimal, Uint128};
+use cosmwasm_std::testing::mock_dependencies;
+use cosmwasm_std::{assert_approx_eq, coin, Addr, Api, Coin, Coins, Decimal, Uint128};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use cw_it::astroport::robot::AstroportTestRobot;
@@ -303,6 +304,73 @@ impl<'a> VaultZapperRobot<'a> {
     ) -> &Self {
         let balance = self.query_vault_token_balance(signer.address());
         self.zapper_redeem(
+            balance,
+            recipient,
+            receive_choice,
+            min_out,
+            unwrap_choice,
+            signer,
+        )
+    }
+
+    /// Zap base tokens via the vault zapper
+    pub fn zap_base_tokens(
+        &self,
+        amount: impl Into<u128>,
+        recipient: Option<String>,
+        receive_choice: ReceiveChoice,
+        min_out: impl Into<AssetListUnchecked>,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        let min_out = min_out.into();
+
+        let base_token = self.deps.vault_robot.base_token();
+        let deps = mock_dependencies();
+        let base_token_asset_info = match deps.api.addr_validate(&base_token) {
+            Ok(addr) => AssetInfo::cw20(addr),
+            Err(_) => AssetInfo::native(&base_token),
+        };
+        let base_token = Asset::new(base_token_asset_info, amount.into());
+
+        // Increase allowance for Cw20s
+        let (funds, cw20s) = separate_natives_and_cw20s(&vec![base_token.clone()].into());
+        for cw20 in cw20s {
+            self.increase_cw20_allowance(
+                &cw20.address,
+                &self.vault_zapper_addr,
+                cw20.amount,
+                signer,
+            );
+        }
+
+        println!("Zapping base tokens: {:?}", base_token);
+
+        unwrap_choice.unwrap(self.wasm().execute(
+            &self.vault_zapper_addr,
+            &ExecuteMsg::ZapBaseTokens {
+                base_token: base_token.into(),
+                recipient,
+                receive_choice,
+                min_out,
+            },
+            &funds,
+            signer,
+        ));
+        self
+    }
+
+    /// Zap all of the signer's base tokens via the vault zapper
+    pub fn zap_all_base_tokens(
+        &self,
+        recipient: Option<String>,
+        receive_choice: ReceiveChoice,
+        min_out: impl Into<AssetListUnchecked>,
+        unwrap_choice: Unwrap,
+        signer: &SigningAccount,
+    ) -> &Self {
+        let balance = self.query_base_token_balance(signer.address());
+        self.zap_base_tokens(
             balance,
             recipient,
             receive_choice,

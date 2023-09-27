@@ -1,4 +1,5 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
+use apollo_utils::assets::receive_assets;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
@@ -132,6 +133,39 @@ pub fn withdraw(
             CallbackMsg::AfterRedeem {
                 receive_choice,
                 vault_base_token,
+                recipient,
+                min_out,
+            }
+            .into_cosmos_msg(&env)?,
+        )
+        .add_event(event))
+}
+
+pub fn execute_zap_base_tokens(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    base_token: Asset,
+    recipient: Option<String>,
+    receive_choice: ReceiveChoice,
+    min_out: AssetList,
+) -> Result<Response, ContractError> {
+    // Unwrap recipient or use sender
+    let recipient = recipient.map_or(Ok(info.sender.clone()), |x| deps.api.addr_validate(&x))?;
+
+    let receive_assets_res = receive_assets(&info, &env, &vec![base_token.clone()].into())?;
+
+    let event = Event::new("apollo/vault-zapper/execute_zap_base_tokens")
+        .add_attribute("base_token", to_binary(&base_token.info)?.to_string())
+        .add_attribute("recipient", &recipient)
+        .add_attribute("receive_choice", to_binary(&receive_choice)?.to_string())
+        .add_attribute("min_out", to_binary(&min_out)?.to_string());
+
+    Ok(receive_assets_res
+        .add_message(
+            CallbackMsg::AfterRedeem {
+                receive_choice,
+                vault_base_token: base_token.info,
                 recipient,
                 min_out,
             }

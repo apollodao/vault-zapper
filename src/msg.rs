@@ -1,4 +1,4 @@
-use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked};
+use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked, AssetUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
@@ -33,6 +33,18 @@ pub enum ExecuteMsg {
         /// The recipient of the redeemed assets
         recipient: Option<String>,
         /// The choice of which asset(s) to receive
+        receive_choice: ReceiveChoice,
+        /// The minimum amount of assets to receive. If the amount of assets
+        /// received is less than this, the transaction will fail.
+        min_out: AssetListUnchecked,
+    },
+    /// Zap a vault's base token to other assets
+    ZapBaseTokens {
+        /// The base token to swap from
+        base_token: AssetUnchecked,
+        /// The recipient of the redeemed assets
+        recipient: Option<String>,
+        /// The asset to swap to
         receive_choice: ReceiveChoice,
         /// The minimum amount of assets to receive. If the amount of assets
         /// received is less than this, the transaction will fail.

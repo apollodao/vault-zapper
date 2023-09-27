@@ -22,6 +22,7 @@ use crate::query::{
 use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_LOCK_KEY};
 use crate::withdraw::{
     callback_after_redeem, callback_after_withdraw_liq, execute_redeem, execute_withdraw_unlocked,
+    execute_zap_base_tokens,
 };
 
 // version info for migration info
@@ -81,6 +82,24 @@ pub fn execute(
                 env,
                 info,
                 api.addr_validate(&vault_address)?,
+                recipient,
+                receive_choice,
+                min_out,
+            )
+        }
+        ExecuteMsg::ZapBaseTokens {
+            base_token,
+            recipient,
+            receive_choice,
+            min_out,
+        } => {
+            let base_token = base_token.check(deps.api)?;
+            let min_out = min_out.check(deps.api)?;
+            execute_zap_base_tokens(
+                deps,
+                env,
+                info,
+                base_token,
                 recipient,
                 receive_choice,
                 min_out,
