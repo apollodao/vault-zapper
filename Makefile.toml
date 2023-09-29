@@ -136,7 +136,7 @@ args = [
 [tasks.test]
 toolchain = "${RUST_VERSION}"
 command = "cargo"
-args = ["test", "--locked"]
+args = ["test", "--locked", "--features", "osmosis,astroport"]
 
 # Run unit tests
 [tasks.unit-test]
