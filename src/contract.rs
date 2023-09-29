@@ -9,15 +9,21 @@ use cw_vault_standard::extensions::lockup::{
     UNLOCKING_POSITION_ATTR_KEY, UNLOCKING_POSITION_CREATED_EVENT_TYPE,
 };
 
-use crate::deposit::{callback_deposit, callback_provide_liquidity, execute_deposit};
+use crate::deposit::{
+    callback_deposit, callback_enforce_min_out, callback_provide_liquidity, execute_deposit,
+};
 use crate::error::ContractError;
 use crate::lockup::execute_unlock;
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::query::{
-    query_depositable_assets, query_user_unlocking_positions, query_withdrawable_assets,
+    query_all_user_unlocking_positions, query_depositable_assets, query_receive_choices,
+    query_user_unlocking_positions_for_vault,
 };
-use crate::state::{LOCKUP_IDS, ROUTER, TEMP_UNLOCK_CALLER};
-use crate::withdraw::{execute_withdraw, execute_withdraw_unlocked};
+use crate::state::{LIQUIDITY_HELPER, LOCKUP_IDS, ROUTER, TEMP_LOCK_KEY};
+use crate::withdraw::{
+    callback_after_redeem, callback_after_withdraw_liq, execute_redeem, execute_withdraw_unlocked,
+    execute_zap_base_tokens,
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
@@ -33,6 +39,7 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     ROUTER.save(deps.storage, &msg.router.check(deps.api)?)?;
+    LIQUIDITY_HELPER.save(deps.storage, &msg.liquidity_helper.check(deps.api)?)?;
 
     Ok(Response::default())
 }
@@ -50,7 +57,7 @@ pub fn execute(
             assets,
             vault_address,
             recipient,
-            slippage_tolerance,
+            min_out,
         } => {
             let assets = assets.check(deps.api)?;
             execute_deposit(
@@ -60,21 +67,44 @@ pub fn execute(
                 assets,
                 api.addr_validate(&vault_address)?,
                 recipient,
-                slippage_tolerance,
+                min_out,
             )
         }
-        ExecuteMsg::Withdraw {
+        ExecuteMsg::Redeem {
             vault_address,
             recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
+            receive_choice,
+            min_out,
+        } => {
+            let min_out = min_out.check(deps.api)?;
+            execute_redeem(
+                deps,
+                env,
+                info,
+                api.addr_validate(&vault_address)?,
+                recipient,
+                receive_choice,
+                min_out,
+            )
+        }
+        ExecuteMsg::ZapBaseTokens {
+            base_token,
             recipient,
-            withdraw_assets,
-        ),
+            receive_choice,
+            min_out,
+        } => {
+            let base_token = base_token.check(deps.api)?;
+            let min_out = min_out.check(deps.api)?;
+            execute_zap_base_tokens(
+                deps,
+                env,
+                info,
+                base_token,
+                recipient,
+                receive_choice,
+                min_out,
+            )
+        }
         ExecuteMsg::Unlock { vault_address } => {
             execute_unlock(deps, env, info, api.addr_validate(&vault_address)?)
         }
@@ -82,48 +112,80 @@ pub fn execute(
             vault_address,
             lockup_id,
             recipient,
-            zap_to: withdraw_assets,
-        } => execute_withdraw_unlocked(
-            deps,
-            env,
-            info,
-            api.addr_validate(&vault_address)?,
-            lockup_id,
-            recipient,
-            withdraw_assets,
-        ),
-        ExecuteMsg::Callback(msg) => match msg {
-            CallbackMsg::ProvideLiquidity {
-                vault_address,
-                recipient,
-                pool,
-                coin_balances,
-                slippage_tolerance,
-            } => callback_provide_liquidity(
+            receive_choice,
+            min_out,
+        } => {
+            let min_out = min_out.check(deps.api)?;
+            execute_withdraw_unlocked(
                 deps,
                 env,
                 info,
-                vault_address,
+                api.addr_validate(&vault_address)?,
+                lockup_id,
                 recipient,
-                pool,
-                coin_balances,
-                slippage_tolerance,
-            ),
-            CallbackMsg::Deposit {
-                vault_address,
-                recipient,
-                coin_balances,
-                deposit_asset_info,
-            } => callback_deposit(
-                deps,
-                env,
-                info,
-                vault_address,
-                recipient,
-                coin_balances,
-                deposit_asset_info,
-            ),
-        },
+                receive_choice,
+                min_out,
+            )
+        }
+        ExecuteMsg::Callback(msg) => {
+            // Can only be called by self
+            if info.sender != env.contract.address {
+                return Err(ContractError::Unauthorized {});
+            }
+
+            match msg {
+                CallbackMsg::ProvideLiquidity {
+                    vault_address,
+                    recipient,
+                    pool,
+                    deposit_asset_info,
+                } => callback_provide_liquidity(
+                    deps,
+                    env,
+                    info,
+                    vault_address,
+                    recipient,
+                    pool,
+                    deposit_asset_info,
+                ),
+                CallbackMsg::Deposit {
+                    vault_address,
+                    recipient,
+                    deposit_asset_info,
+                } => callback_deposit(
+                    deps,
+                    env,
+                    info,
+                    vault_address,
+                    recipient,
+                    deposit_asset_info,
+                ),
+                CallbackMsg::EnforceMinOut {
+                    assets,
+                    recipient,
+                    balances_before,
+                    min_out,
+                } => callback_enforce_min_out(deps, assets, recipient, balances_before, min_out),
+                CallbackMsg::AfterRedeem {
+                    receive_choice,
+                    vault_base_token,
+                    recipient,
+                    min_out,
+                } => callback_after_redeem(
+                    deps,
+                    env,
+                    receive_choice,
+                    vault_base_token,
+                    recipient,
+                    min_out,
+                ),
+                CallbackMsg::AfterWithdrawLiq {
+                    assets,
+                    receive_choice,
+                    recipient,
+                } => callback_after_withdraw_liq(deps, env, assets, receive_choice, recipient),
+            }
+        }
     }
 }
 
@@ -134,23 +196,40 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::WithdrawableAssets { vault_address } => to_binary(&query_withdrawable_assets(
+        QueryMsg::ReceiveChoices { vault_address } => to_binary(&query_receive_choices(
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::UnlockingPositions {
+        QueryMsg::UserUnlockingPositionsForVault {
             vault_address,
             owner,
-        } => to_binary(&query_user_unlocking_positions(
+            start_after_id,
+            limit,
+        } => to_binary(&query_user_unlocking_positions_for_vault(
             deps,
             env,
             deps.api.addr_validate(&vault_address)?,
+            start_after_id,
+            limit,
             deps.api.addr_validate(&owner)?,
+        )?),
+        QueryMsg::UserUnlockingPositions {
+            owner,
+            start_after_vault_addr,
+            start_after_id,
+            limit,
+        } => to_binary(&query_all_user_unlocking_positions(
+            deps,
+            env,
+            deps.api.addr_validate(&owner)?,
+            start_after_vault_addr,
+            start_after_id,
+            limit,
         )?),
     }
 }
 
-pub const UNLOCK_REPLY_ID: u64 = 0u64;
+pub const UNLOCK_REPLY_ID: u64 = 143u64;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
@@ -167,21 +246,14 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractE
                 UNLOCKING_POSITION_ATTR_KEY,
             )?;
 
-            // Read temporarily stored caller address
-            let caller_addr = TEMP_UNLOCK_CALLER.load(deps.storage)?;
-
-            //Read users lock Ids.
-            let mut lock_ids = LOCKUP_IDS
-                .load(deps.storage, caller_addr.clone())
-                .unwrap_or_default();
-
-            lock_ids.push(lockup_id);
+            // Read temporarily stored caller address and vault address
+            let (user, vault) = TEMP_LOCK_KEY.load(deps.storage)?;
 
             // Store lockup_id
-            LOCKUP_IDS.save(deps.storage, caller_addr, &lock_ids)?;
+            LOCKUP_IDS.save(deps.storage, (user, vault, lockup_id), &())?;
 
-            //Erase temp caller address
-            TEMP_UNLOCK_CALLER.remove(deps.storage);
+            //Erase temp key
+            TEMP_LOCK_KEY.remove(deps.storage);
 
             Ok(Response::default())
         }

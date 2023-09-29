@@ -1,23 +1,26 @@
+use std::collections::HashMap;
+
 use apollo_cw_asset::AssetInfo;
-use cosmwasm_std::{Addr, Deps, Env, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, Empty, Env, Order, StdError, StdResult};
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
+use cw_storage_plus::Bound;
 
-use crate::state::{LOCKUP_IDS, ROUTER};
+use crate::msg::ReceiveChoice;
+use crate::state::{self, DEFAULT_LIMIT, LOCKUP_IDS, ROUTER};
 
 use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
-use cw_vault_standard::{ExtensionQueryMsg, VaultInfoResponse, VaultStandardQueryMsg};
+use cw_vault_standard::{ExtensionQueryMsg, VaultContract, VaultStandardQueryMsg};
 
 pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
-
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let deposit_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
+    };
 
     // Check if deposit asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
@@ -47,36 +50,29 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
     let supported_offer_assets =
         router.query_supported_offer_assets(&deps.querier, &target_asset)?;
 
-    let mut depositable_assets = vec![deposit_asset_info];
-
-    // Get only native coins from supported offer assets
-    for asset in supported_offer_assets {
-        if let AssetInfo::Native(_) = &asset {
-            depositable_assets.push(asset);
-        }
-    }
+    let depositable_assets = [
+        &[deposit_asset_info, target_asset],
+        supported_offer_assets.as_slice(),
+    ]
+    .concat();
 
     Ok(depositable_assets)
 }
 
-pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<Vec<AssetInfo>> {
+pub fn query_receive_choices(deps: Deps, vault_address: Addr) -> StdResult<Vec<ReceiveChoice>> {
     let router = ROUTER.load(deps.storage)?;
 
     // Query the vault info
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
-
-    let withdraw_asset_info = AssetInfo::Native(vault_info.base_token);
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let withdraw_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
+    };
 
     // Check if the withdrawn asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
 
-    // Create withdrawable assets vec with first one being the withdraw asset
-    let mut withdrawable_assets = vec![withdraw_asset_info.clone()];
-
-    let supported_ask_assets: Vec<AssetInfo> = match pool {
+    let swap_to_choices: Vec<AssetInfo> = match pool {
         Some(pool) => {
             // Get the assets in the pool
             let pool_tokens: Vec<AssetInfo> = pool
@@ -101,9 +97,7 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
                 }
             }
 
-            // Add the multi-token case where equal to the tokens in the pair
-            withdrawable_assets.extend(pool_tokens);
-
+            supported_ask_assets.extend(pool_tokens);
             supported_ask_assets
         }
         None => {
@@ -112,38 +106,91 @@ pub fn query_withdrawable_assets(deps: Deps, vault_address: Addr) -> StdResult<V
         }
     };
 
-    // Add all supported ask assets as single withdrawal options
-    for ask_asset in supported_ask_assets {
-        if let AssetInfo::Native(_) = &ask_asset {
-            withdrawable_assets.push(ask_asset);
-        }
-    }
+    let swap_to_choices = swap_to_choices
+        .iter()
+        .map(|asset| ReceiveChoice::SwapTo(asset.clone()))
+        .collect::<Vec<_>>();
 
-    Ok(withdrawable_assets)
+    let receive_choices = [
+        swap_to_choices.as_slice(),
+        &[ReceiveChoice::BaseToken, ReceiveChoice::Underlying],
+    ]
+    .concat();
+
+    Ok(receive_choices)
 }
 
-pub fn query_user_unlocking_positions(
+pub fn query_user_unlocking_positions_for_vault(
     deps: Deps,
     env: Env,
     vault_address: Addr,
+    start_after_id: Option<u64>,
+    limit: Option<u32>,
     user: Addr,
 ) -> StdResult<Vec<UnlockingPosition>> {
-    let mut user_lockup_ids = LOCKUP_IDS.load(deps.storage, user).unwrap_or_default();
-    user_lockup_ids.sort();
-    let mut unlocking_positions: Vec<UnlockingPosition> = deps.querier.query_wasm_smart(
-        vault_address,
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
-            LockupQueryMsg::UnlockingPositions {
-                owner: env.contract.address.to_string(),
-                start_after: if !user_lockup_ids.is_empty() && user_lockup_ids[0] > 0 {
-                    Some(user_lockup_ids[0] - 1)
-                } else {
-                    None
-                },
-                limit: None,
-            },
-        )),
-    )?;
-    unlocking_positions.retain(|p| user_lockup_ids.contains(&p.id));
+    let limit = limit.unwrap_or(DEFAULT_LIMIT) as usize;
+    let start: Option<Bound<u64>> = start_after_id.map(Bound::exclusive);
+
+    let user_lockup_ids = LOCKUP_IDS
+        .prefix((user, vault_address.clone()))
+        .range(deps.storage, start, None, Order::Ascending)
+        .take(limit);
+
+    let mut unlocking_positions: Vec<UnlockingPosition> = vec![];
+
+    for res in user_lockup_ids {
+        let (lockup_id, _) = res?;
+
+        let unlocking_position = deps.querier.query_wasm_smart::<UnlockingPosition>(
+            &vault_address,
+            &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
+                LockupQueryMsg::UnlockingPosition { lockup_id },
+            )),
+        )?;
+
+        if unlocking_position.owner == env.contract.address {
+            unlocking_positions.push(unlocking_position);
+        }
+    }
     Ok(unlocking_positions)
+}
+
+pub fn query_all_user_unlocking_positions(
+    deps: Deps,
+    env: Env,
+    user: Addr,
+    start_after_vault_addr: Option<String>,
+    start_after_id: Option<u64>,
+    limit: Option<u32>,
+) -> StdResult<HashMap<Addr, Vec<UnlockingPosition>>> {
+    let user_lockup_ids = state::paginate_all_user_unlocking_positions(
+        deps,
+        user,
+        start_after_vault_addr,
+        start_after_id,
+        limit,
+    )?;
+
+    let mut unlocking_positions_per_vault: HashMap<Addr, Vec<UnlockingPosition>> = HashMap::new();
+
+    for item in user_lockup_ids {
+        let ((vault_address, lockup_id), _) = item?;
+
+        let unlocking_position = deps.querier.query_wasm_smart::<UnlockingPosition>(
+            &vault_address,
+            &VaultStandardQueryMsg::<ExtensionQueryMsg>::VaultExtension(ExtensionQueryMsg::Lockup(
+                LockupQueryMsg::UnlockingPosition { lockup_id },
+            )),
+        )?;
+
+        if unlocking_position.owner == env.contract.address {
+            if let Some(positions) = unlocking_positions_per_vault.get_mut(&vault_address) {
+                positions.push(unlocking_position);
+            } else {
+                unlocking_positions_per_vault.insert(vault_address, vec![unlocking_position]);
+            }
+        }
+    }
+
+    Ok(unlocking_positions_per_vault)
 }

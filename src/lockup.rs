@@ -9,7 +9,7 @@ use cw_vault_standard::{
 };
 
 use crate::contract::UNLOCK_REPLY_ID;
-use crate::state::TEMP_UNLOCK_CALLER;
+use crate::state::TEMP_LOCK_KEY;
 use crate::ContractError;
 
 pub fn execute_unlock(
@@ -44,9 +44,9 @@ pub fn execute_unlock(
         )?,
     });
 
-    // Temporarily store the caller's address so we can read it in the reply
-    // entrypoint
-    TEMP_UNLOCK_CALLER.save(deps.storage, &info.sender)?;
+    // Temporarily store the caller's address and the vault address so we can read
+    // it in the reply entrypoint
+    TEMP_LOCK_KEY.save(deps.storage, &(info.sender, vault_address))?;
 
     // We must add the unlock message as a submessage and parse the Lock ID in the
     // reply entrypoint.

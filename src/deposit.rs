@@ -1,66 +1,75 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Coin, CosmosMsg, Decimal, DepsMut, Env, MessageInfo, Response, Uint128,
-    WasmMsg,
+    to_binary, Addr, Binary, Coin, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
-use cw_vault_standard::{
-    ExtensionExecuteMsg, ExtensionQueryMsg, VaultInfoResponse, VaultStandardExecuteMsg,
-    VaultStandardQueryMsg,
-};
+use cw_vault_standard::VaultContract;
 
-use crate::helpers::TokenBalances;
+use crate::helpers::VaultHelper;
 use crate::msg::CallbackMsg;
-use crate::state::ROUTER;
+use crate::state::{LIQUIDITY_HELPER, ROUTER};
 use crate::ContractError;
 
 pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    caller_funds: AssetList,
+    assets: AssetList,
     vault_address: Addr,
     recipient: Option<String>,
-    slippage_tolerance: Option<Decimal>,
+    min_out: Uint128,
 ) -> Result<Response, ContractError> {
     // Unwrap recipient or use sender
     let recipient = recipient.map_or(Ok(info.sender.clone()), |x| deps.api.addr_validate(&x))?;
 
-    let router = ROUTER.load(deps.storage)?;
+    let receive_assets_res = receive_assets(&info, &env, &assets)?;
 
-    let receive_assets_res = receive_assets(&info, &env, &caller_funds)?;
+    // Query the vault info to get the deposit asset
+    let vault: VaultContract<Empty, Empty> = VaultContract::new(&deps.querier, &vault_address)?;
+    let deposit_asset_info = match deps.api.addr_validate(&vault.base_token) {
+        Ok(addr) => AssetInfo::cw20(addr),
+        Err(_) => AssetInfo::native(&vault.base_token),
+    };
 
-    // Query the vault info
-    let vault_info: VaultInfoResponse = deps.querier.query_wasm_smart(
-        vault_address.to_string(),
-        &VaultStandardQueryMsg::<ExtensionQueryMsg>::Info {},
-    )?;
+    // Add a message to enforce the minimum amount of vault tokens received
+    let vault_token = AssetInfo::native(&vault.vault_token);
+    let balance_before = vault_token.query_balance(&deps.querier, recipient.clone())?;
+    let enforce_min_out_msg = CallbackMsg::EnforceMinOut {
+        assets: vec![vault_token.clone()],
+        recipient: recipient.clone(),
+        balances_before: vec![Asset::new(vault_token.clone(), balance_before)].into(),
+        min_out: vec![Asset::new(vault_token.clone(), min_out)].into(),
+    }
+    .into_cosmos_msg(&env)?;
 
-    let deposit_asset_info = AssetInfo::Native(vault_info.base_token);
+    let event = Event::new("apollo/vault-zapper/execute_deposit")
+        .add_attribute("assets", to_binary(&assets)?.to_string())
+        .add_attribute("vault_address", &vault_address)
+        .add_attribute("recipient", &recipient)
+        .add_attribute("min_out", min_out);
 
     // Check if coins sent are already same as the depositable assets
     // If yes, then just deposit the coins
-    if caller_funds.len() == 1 && caller_funds.to_vec()[0].info == deposit_asset_info {
-        let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: vault_address.to_string(),
-            funds: caller_funds
-                .into_iter()
-                .filter_map(|a| a.try_into().ok())
-                .collect(),
-            msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-                amount: caller_funds.to_vec()[0].amount,
-                recipient: Some(recipient.to_string()),
-            })?,
-        });
-        return Ok(Response::new().add_message(deposit_msg));
+    if assets.len() == 1 && assets.to_vec()[0].info == deposit_asset_info {
+        let amount = assets.to_vec()[0].amount;
+        let msgs = vault.increase_allowance_and_deposit(
+            amount,
+            &deposit_asset_info,
+            Some(recipient.to_string()),
+        )?;
+
+        return Ok(receive_assets_res
+            .add_messages(msgs)
+            .add_message(enforce_min_out_msg)
+            .add_event(event));
     }
 
     //Check if the depositable asset is an LP token
     let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
 
-    //Set the target of the basket liquidation, depending on if depositable asset
+    // Set the target of the basket liquidation, depending on if depositable asset
     // is an LP token or not
     let receive_asset_infos = match &pool {
         Some(pool) => {
@@ -77,13 +86,9 @@ pub fn execute_deposit(
         }
     };
 
-    // Get the amount of tokens sent by the caller and how much was already in the
-    // contract.
-    let token_balances = TokenBalances::new(deps.as_ref(), &env, &caller_funds)?;
-
     // Basket Liquidate deposited coins
     // We only liquidate the coins that are not already the target asset
-    let liquidate_coins = caller_funds
+    let liquidate_coins = assets
         .into_iter()
         .filter_map(|a| {
             if !receive_asset_infos.contains(&a.info) {
@@ -95,6 +100,7 @@ pub fn execute_deposit(
         .collect::<Vec<Coin>>();
     let receive_asset_info = receive_asset_infos[0].clone();
     let mut msgs = if !liquidate_coins.is_empty() {
+        let router = ROUTER.load(deps.storage)?;
         router.basket_liquidate_msgs(liquidate_coins.into(), &receive_asset_info, None, None)?
     } else {
         vec![]
@@ -108,8 +114,7 @@ pub fn execute_deposit(
                 vault_address,
                 recipient,
                 pool,
-                coin_balances: token_balances,
-                slippage_tolerance,
+                deposit_asset_info,
             }
             .into_cosmos_msg(&env)?,
         )
@@ -120,86 +125,60 @@ pub fn execute_deposit(
             CallbackMsg::Deposit {
                 vault_address,
                 recipient,
-                coin_balances: token_balances,
                 deposit_asset_info,
             }
             .into_cosmos_msg(&env)?,
         );
     }
 
-    Ok(receive_assets_res.add_messages(msgs))
+    Ok(receive_assets_res
+        .add_messages(msgs)
+        .add_message(enforce_min_out_msg)
+        .add_event(event))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn callback_provide_liquidity(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     vault_address: Addr,
     recipient: Addr,
     pool: Pool,
-    mut coin_balances: TokenBalances,
-    slippage_tolerance: Option<Decimal>,
+    deposit_asset_info: AssetInfo,
 ) -> Result<Response, ContractError> {
-    // Can only be called by self
-    if info.sender != env.contract.address {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // Update coin balances
-    coin_balances.update_balances(deps.as_ref(), &env)?;
-
-    // Provide liquidity with all assets returned from the basket liquidation
-    // and any that the caller sent with the original message.
-    let provide_liquidity_assets: AssetList = pool
-        .get_pool_liquidity(deps.as_ref())?
-        .into_iter()
-        .filter_map(|a| {
-            let balance = coin_balances.get_caller_balance(&a.info);
-            if balance > Uint128::zero() {
-                Some(Asset::new(a.info.clone(), balance))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<Asset>>()
-        .into();
-
-    // Simulate providing liquidity
-    let lp_tokens_received =
-        pool.simulate_provide_liquidity(deps.as_ref(), &env, provide_liquidity_assets.clone())?;
-
-    // Provide liquidity to the pool
-    let mut response = pool.provide_liquidity(
-        deps.as_ref(),
-        &env,
-        provide_liquidity_assets,
-        if let Some(slippage_tolerance) = slippage_tolerance {
-            lp_tokens_received.amount * (Decimal::one() - slippage_tolerance)
-        } else {
-            lp_tokens_received.amount
-        },
+    let pool_asset_balances = AssetList::query_asset_info_balances(
+        pool.pool_assets(deps.as_ref())?,
+        &deps.querier,
+        &env.contract.address,
     )?;
 
-    // Deposit any LP tokens the caller sent with the original message plus those
-    // received from this liquidity provision.
-    let amount_to_deposit = coin_balances
-        .get_caller_balance(&lp_tokens_received.info)
-        .checked_add(lp_tokens_received.amount)?;
+    let liquidity_helper = LIQUIDITY_HELPER.load(deps.storage)?;
 
-    // Deposit the coins into the vault
-    let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: vault_address.to_string(),
-        funds: vec![Coin {
-            denom: lp_tokens_received.info.to_string(),
-            amount: amount_to_deposit,
-        }],
-        msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-            amount: amount_to_deposit,
-            recipient: Some(recipient.to_string()),
-        })?,
-    });
-    response = response.add_message(deposit_msg);
+    let pool: Binary = match pool {
+        #[cfg(feature = "astroport")]
+        Pool::Astroport(pool) => to_binary(&pool)?,
+        #[cfg(feature = "osmosis")]
+        Pool::Osmosis(pool) => to_binary(&pool)?,
+        _ => panic!("Unsupported pool type"),
+    };
+
+    let provide_liquidity_msgs = liquidity_helper.balancing_provide_liquidity(
+        pool_asset_balances,
+        Uint128::zero(),
+        pool,
+        None,
+    )?;
+
+    let response = Response::new()
+        .add_messages(provide_liquidity_msgs)
+        .add_message(
+            CallbackMsg::Deposit {
+                vault_address,
+                recipient,
+                deposit_asset_info,
+            }
+            .into_cosmos_msg(&env)?,
+        );
 
     Ok(response)
 }
@@ -207,33 +186,54 @@ pub fn callback_provide_liquidity(
 pub fn callback_deposit(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     vault_address: Addr,
     recipient: Addr,
-    mut coin_balances: TokenBalances,
     deposit_asset_info: AssetInfo,
 ) -> Result<Response, ContractError> {
-    // Can only be called by self
-    if info.sender != env.contract.address {
-        return Err(ContractError::Unauthorized {});
+    let amount_to_deposit =
+        deposit_asset_info.query_balance(&deps.querier, env.contract.address)?;
+
+    let vault: VaultContract<_, _> =
+        VaultContract::<Empty, Empty>::new(&deps.querier, &vault_address)?;
+    let msgs = vault.increase_allowance_and_deposit(
+        amount_to_deposit,
+        &deposit_asset_info,
+        Some(recipient.to_string()),
+    )?;
+
+    Ok(Response::new().add_messages(msgs))
+}
+
+pub fn callback_enforce_min_out(
+    deps: DepsMut,
+    assets: Vec<AssetInfo>,
+    recipient: Addr,
+    balances_before: AssetList,
+    min_out: AssetList,
+) -> Result<Response, ContractError> {
+    let mut new_balances =
+        AssetList::query_asset_info_balances(assets.clone(), &deps.querier, &recipient)?;
+    let assets_received = new_balances.deduct_many(&balances_before)?;
+
+    for asset in min_out.iter() {
+        let received = assets_received
+            .find(&asset.info)
+            .map(|x| x.amount)
+            .unwrap_or_default();
+        if received < asset.amount {
+            return Err(ContractError::MinOutNotMet {
+                min_out: asset.amount,
+                actual: received,
+            });
+        }
     }
 
-    // Update the coin balances
-    coin_balances.update_balances(deps.as_ref(), &env)?;
+    let event = Event::new("apollo/vault-zapper/callback_enforce_min_out")
+        .add_attribute("recipient", recipient)
+        .add_attribute("assets", to_binary(&assets)?.to_string())
+        .add_attribute("min_out", to_binary(&min_out)?.to_string())
+        .add_attribute("assets_received", to_binary(&assets_received)?.to_string());
 
-    // Deposit the coins into the vault
-    let caller_balance = coin_balances.get_caller_balance(&deposit_asset_info);
-    let deposit_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: vault_address.to_string(),
-        funds: vec![Coin {
-            denom: deposit_asset_info.to_string(),
-            amount: caller_balance,
-        }],
-        msg: to_binary(&VaultStandardExecuteMsg::<ExtensionExecuteMsg>::Deposit {
-            amount: caller_balance,
-            recipient: Some(recipient.to_string()),
-        })?,
-    });
-
-    Ok(Response::new().add_message(deposit_msg))
+    Ok(Response::new().add_event(event))
 }

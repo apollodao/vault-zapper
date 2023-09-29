@@ -1,5 +1,5 @@
 [package]
-name = "vault-zapper"
+name    = "vault-zapper"
 version = "0.1.0"
 authors = ["Sturdy <sturdy@apollo.farm>"]
 edition = "2021"
@@ -32,28 +32,34 @@ default = []
 library = []
 osmosis = ["cw-dex/osmosis"]
 astroport = ["cw-dex/astroport"]
+osmosis-test-tube = ["cw-it/osmosis-test-tube", "locked-astroport-vault-test-helpers/osmosis-test-tube"]
 
-[package.metadata.scripts]
-optimize = """docker run --rm -v "$(pwd)":/code \
-  --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-  --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.11
-"""
-optimize-arm64 = """docker run --rm -v "$(pwd)":/code \
---mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
---mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-cosmwasm/rust-optimizer-arm64:0.12.11
-"""
+
+[package.metadata.optimizer]
+builds = [
+  { name = "astroport", features = ["astroport"] },
+  { name = "osmosis", features = ["osmosis"] },
+]
 
 [dependencies]
-apollo-utils = "0.1.1"
-cosmwasm-schema = "1.4.0"
-cosmwasm-std = "1.4.0"
-cw-storage-plus = "1.1.0"
-cw2 = "1.1.0"
-cw20 = "1.1.0"
-thiserror = { version = "1.0.48" }
-cw-vault-standard = { version = "0.3.2", features = ["lockup"] }
-cw-dex-router = { version = "0.1.0", features = ["library"] }
-apollo-cw-asset = "0.1.2"
-cw-dex = "0.3.1"
+apollo-utils                        = "0.1.1"
+cosmwasm-schema                     = "1.4.0"
+cosmwasm-std                        = "1.4.0"
+cw-storage-plus                     = "1.1.0"
+cw2                                 = "1.1.0"
+cw20                                = "1.1.0"
+thiserror                           = { version = "1.0.48" }
+cw-vault-standard                   = { version = "0.3.3-rc.1", features = ["lockup"] }
+cw-dex-router                       = { version = "0.1.0", features = ["library"] }
+apollo-cw-asset                     = "0.1.2"
+cw-dex                              = "0.4.0-rc.2"
+liquidity-helper                    = "0.1.0"
+
+[dev-dependencies]
+cw-it                               = { version = "0.2.0-rc.4", features = ["astroport-multi-test"] }
+cw-vault-standard-test-helpers      = "0.3.3-rc.4"
+locked-astroport-vault-test-helpers = "0.1.0-rc.4"
+locked-astroport-vault              = "0.1.0-rc.2"
+astroport-liquidity-helper          = "0.2.0"
+test-case                           = "3.1.0"
+cw-utils                            = "1.0.1"
