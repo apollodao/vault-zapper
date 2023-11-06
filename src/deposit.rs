@@ -1,7 +1,7 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
-    to_binary, Addr, Binary, Coin, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
+    to_json_binary, Addr, Binary, Coin, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
@@ -9,7 +9,7 @@ use cw_vault_standard::VaultContract;
 
 use crate::helpers::VaultHelper;
 use crate::msg::CallbackMsg;
-use crate::state::{LIQUIDITY_HELPER, ROUTER};
+use crate::state::{ASTROPORT_LIQUIDITY_MANAGER, LIQUIDITY_HELPER, ROUTER};
 use crate::ContractError;
 
 pub fn execute_deposit(
@@ -45,7 +45,7 @@ pub fn execute_deposit(
     .into_cosmos_msg(&env)?;
 
     let event = Event::new("apollo/vault-zapper/execute_deposit")
-        .add_attribute("assets", to_binary(&assets)?.to_string())
+        .add_attribute("assets", to_json_binary(&assets)?.to_string())
         .add_attribute("vault_address", &vault_address)
         .add_attribute("recipient", &recipient)
         .add_attribute("min_out", min_out);
@@ -67,7 +67,13 @@ pub fn execute_deposit(
     }
 
     //Check if the depositable asset is an LP token
-    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &deposit_asset_info).ok();
+    let astroport_liquidity_manager = ASTROPORT_LIQUIDITY_MANAGER.may_load(deps.storage)?;
+    let pool = Pool::get_pool_for_lp_token(
+        deps.as_ref(),
+        &deposit_asset_info,
+        astroport_liquidity_manager,
+    )
+    .ok();
 
     // Set the target of the basket liquidation, depending on if depositable asset
     // is an LP token or not
@@ -156,9 +162,9 @@ pub fn callback_provide_liquidity(
 
     let pool: Binary = match pool {
         #[cfg(feature = "astroport")]
-        Pool::Astroport(pool) => to_binary(&pool)?,
+        Pool::Astroport(pool) => to_json_binary(&pool)?,
         #[cfg(feature = "osmosis")]
-        Pool::Osmosis(pool) => to_binary(&pool)?,
+        Pool::Osmosis(pool) => to_json_binary(&pool)?,
         _ => panic!("Unsupported pool type"),
     };
 
@@ -231,9 +237,12 @@ pub fn callback_enforce_min_out(
 
     let event = Event::new("apollo/vault-zapper/callback_enforce_min_out")
         .add_attribute("recipient", recipient)
-        .add_attribute("assets", to_binary(&assets)?.to_string())
-        .add_attribute("min_out", to_binary(&min_out)?.to_string())
-        .add_attribute("assets_received", to_binary(&assets_received)?.to_string());
+        .add_attribute("assets", to_json_binary(&assets)?.to_string())
+        .add_attribute("min_out", to_json_binary(&min_out)?.to_string())
+        .add_attribute(
+            "assets_received",
+            to_json_binary(&assets_received)?.to_string(),
+        );
 
     Ok(Response::new().add_event(event))
 }

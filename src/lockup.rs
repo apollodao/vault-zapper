@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, ReplyOn, Response, SubMsg,
+    to_json_binary, Addr, CosmosMsg, DepsMut, Empty, Env, MessageInfo, ReplyOn, Response, SubMsg,
     WasmMsg,
 };
 use cw_vault_standard::extensions::lockup::LockupExecuteMsg;
@@ -35,7 +35,7 @@ pub fn execute_unlock(
     let unlock_msg: CosmosMsg<Empty> = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: vault_address.to_string(),
         funds: vec![vault_token.clone()],
-        msg: to_binary(
+        msg: to_json_binary(
             &VaultStandardExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
                 ExtensionExecuteMsg::Lockup(LockupExecuteMsg::Unlock {
                     amount: vault_token.amount,

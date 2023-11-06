@@ -185,6 +185,12 @@ impl<'a> VaultZapperRobot<'a> {
             liquidity_helper: LiquidityHelperUnchecked::new(
                 dependencies.liquidity_helper_addr.clone(),
             ),
+            #[cfg(feature = "astroport")]
+            astroport_liquidity_manager: dependencies
+                .astroport_contracts
+                .liquidity_manager
+                .address
+                .clone(),
         };
 
         // Upload contract

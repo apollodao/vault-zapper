@@ -1,6 +1,6 @@
 use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked, AssetUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use liquidity_helper::LiquidityHelperUnchecked;
@@ -9,6 +9,10 @@ use liquidity_helper::LiquidityHelperUnchecked;
 pub struct InstantiateMsg {
     pub router: CwDexRouterUnchecked,
     pub liquidity_helper: LiquidityHelperUnchecked,
+    /// The address of the `astroport-liquidity-manager` contract. Only needed
+    /// if the `astroport` feature flag is enabled.
+    #[cfg(feature = "astroport")]
+    pub astroport_liquidity_manager: String,
 }
 
 #[cw_serde]
@@ -126,7 +130,7 @@ impl CallbackMsg {
     pub fn into_cosmos_msg(&self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self.clone()))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self.clone()))?,
             funds: vec![],
         }))
     }

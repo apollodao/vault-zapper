@@ -2,7 +2,8 @@ use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128, WasmMsg,
+    to_json_binary, Addr, CosmosMsg, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
+    WasmMsg,
 };
 use cw_dex::traits::Pool as PoolTrait;
 use cw_dex::Pool;
@@ -11,7 +12,7 @@ use cw_vault_standard::msg::{ExtensionExecuteMsg, VaultStandardExecuteMsg as Vau
 use cw_vault_standard::VaultContract;
 
 use crate::msg::{CallbackMsg, ReceiveChoice};
-use crate::state::{LOCKUP_IDS, ROUTER};
+use crate::state::{ASTROPORT_LIQUIDITY_MANAGER, LOCKUP_IDS, ROUTER};
 use crate::ContractError;
 
 #[cw_serde]
@@ -111,7 +112,7 @@ pub fn withdraw(
         RedeemType::Lockup(lockup_id) => CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: vault_address.to_string(),
             funds: vec![],
-            msg: to_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
+            msg: to_json_binary(&VaultExecuteMsg::<ExtensionExecuteMsg>::VaultExtension(
                 ExtensionExecuteMsg::Lockup(LockupExecuteMsg::WithdrawUnlocked {
                     recipient: None,
                     lockup_id,
@@ -123,9 +124,12 @@ pub fn withdraw(
     let event = Event::new("apollo/vault-zapper/withdraw")
         .add_attribute("vault_address", &vault_address)
         .add_attribute("recipient", &recipient)
-        .add_attribute("receive_choice", to_binary(&receive_choice)?.to_string())
-        .add_attribute("withdraw_type", to_binary(&withdraw_type)?.to_string())
-        .add_attribute("min_out", to_binary(&min_out)?.to_string());
+        .add_attribute(
+            "receive_choice",
+            to_json_binary(&receive_choice)?.to_string(),
+        )
+        .add_attribute("withdraw_type", to_json_binary(&withdraw_type)?.to_string())
+        .add_attribute("min_out", to_json_binary(&min_out)?.to_string());
 
     Ok(Response::new()
         .add_message(withdraw_msg)
@@ -156,10 +160,13 @@ pub fn execute_zap_base_tokens(
     let receive_assets_res = receive_assets(&info, &env, &vec![base_token.clone()].into())?;
 
     let event = Event::new("apollo/vault-zapper/execute_zap_base_tokens")
-        .add_attribute("base_token", to_binary(&base_token.info)?.to_string())
+        .add_attribute("base_token", to_json_binary(&base_token.info)?.to_string())
         .add_attribute("recipient", &recipient)
-        .add_attribute("receive_choice", to_binary(&receive_choice)?.to_string())
-        .add_attribute("min_out", to_binary(&min_out)?.to_string());
+        .add_attribute(
+            "receive_choice",
+            to_json_binary(&receive_choice)?.to_string(),
+        )
+        .add_attribute("min_out", to_json_binary(&min_out)?.to_string());
 
     Ok(receive_assets_res
         .add_message(
@@ -187,7 +194,13 @@ pub fn callback_after_redeem(
         vault_base_token.query_balance(&deps.querier, &env.contract.address)?;
     let base_token = Asset::new(vault_base_token.clone(), base_token_balance);
 
-    let pool = Pool::get_pool_for_lp_token(deps.as_ref(), &vault_base_token).ok();
+    let astroport_liquidity_manager = ASTROPORT_LIQUIDITY_MANAGER.may_load(deps.storage)?;
+    let pool = Pool::get_pool_for_lp_token(
+        deps.as_ref(),
+        &vault_base_token,
+        astroport_liquidity_manager,
+    )
+    .ok();
 
     // Check requested withdrawal assets
     let (res, withdrawal_assets) = match &receive_choice {

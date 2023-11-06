@@ -2,7 +2,7 @@ use cosmwasm_schema::schemars::JsonSchema;
 use cosmwasm_schema::serde::Serialize;
 
 use apollo_cw_asset::AssetInfo;
-use cosmwasm_std::{to_binary, CosmosMsg, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, CosmosMsg, StdResult, Uint128, WasmMsg};
 use cw_vault_standard::VaultContract;
 
 /// A trait to help with depositing an `Asset` into a vault.
@@ -36,7 +36,7 @@ where
             // If CW20, first increase allowance
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: deposit_asset_info.to_string(),
-                msg: to_binary(&cw20::Cw20ExecuteMsg::IncreaseAllowance {
+                msg: to_json_binary(&cw20::Cw20ExecuteMsg::IncreaseAllowance {
                     spender: self.addr.to_string(),
                     amount,
                     expires: None,
