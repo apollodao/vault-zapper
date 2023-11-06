@@ -213,6 +213,11 @@ fn query_unlocking_positions_for_two_vaults() {
         liquidity_helper: LiquidityHelperUnchecked::new(
             vault_dependencies.liquidity_helper_addr.clone(),
         ),
+        astroport_liquidity_manager: vault_dependencies
+            .astroport_contracts
+            .liquidity_manager
+            .address
+            .clone(),
     };
     let astro_ntrn_vault_robot = LockedAstroportVaultRobot::new_with_instantiate_msg(
         &runner,
@@ -366,59 +371,84 @@ fn query_unlocking_positions_for_two_vaults() {
     );
 
     // Query with start_after_vault_addr
+    // Addresses are randomly generated, so we need to check which is
+    // lexigraphically smaller
+    let (
+        first_vault,
+        second_vault,
+        first_vault_second_pos,
+        second_vault_first_pos,
+        second_vault_second_pos,
+    ) = if vault_1_addr < vault_2_addr {
+        (
+            vault_1_addr.clone(),
+            vault_2_addr.clone(),
+            vault_1_unlocking_pos_1.clone(),
+            vault_2_unlocking_pos_0.clone(),
+            vault_2_unlocking_pos_1.clone(),
+        )
+    } else {
+        (
+            vault_2_addr.clone(),
+            vault_1_addr.clone(),
+            vault_2_unlocking_pos_1.clone(),
+            vault_1_unlocking_pos_0.clone(),
+            vault_1_unlocking_pos_1.clone(),
+        )
+    };
     let res = robot.zapper_query_user_unlocking_positions(
         &admin.address(),
-        Some(vault_1_addr.to_string()),
+        Some(first_vault.to_string()),
         None,
         None,
     );
     assert_eq!(res.len(), 1);
-    let positions_for_vault_two = res.get(&vault_2_addr).unwrap();
+    let positions_for_vault_two = res.get(&second_vault).unwrap();
     assert_eq!(positions_for_vault_two.len(), 2);
     assert_eq!(
         positions_for_vault_two,
         &vec![
-            vault_2_unlocking_pos_0.clone(),
-            vault_2_unlocking_pos_1.clone()
+            second_vault_first_pos.clone(),
+            second_vault_second_pos.clone()
         ]
     );
 
     // Query with start_after_vault_addr and start_after_id
     let res = robot.zapper_query_user_unlocking_positions(
         &admin.address(),
-        Some(vault_1_addr.to_string()),
+        Some(first_vault.to_string()),
         Some(0),
         None,
     );
     assert_eq!(res.len(), 2);
-    let positions_for_vault_one = res.get(&vault_1_addr).unwrap();
-    let positions_for_vault_two = res.get(&vault_2_addr).unwrap();
+    let positions_for_vault_one = res.get(&first_vault).unwrap();
+    let positions_for_vault_two = res.get(&second_vault).unwrap();
     assert_eq!(positions_for_vault_one.len(), 1);
     assert_eq!(positions_for_vault_two.len(), 2);
     assert_eq!(
         positions_for_vault_one,
-        &vec![vault_1_unlocking_pos_1.clone()]
+        &vec![first_vault_second_pos.clone()]
     );
     assert_eq!(
         positions_for_vault_two,
         &vec![
-            vault_2_unlocking_pos_0.clone(),
-            vault_2_unlocking_pos_1.clone()
+            second_vault_first_pos.clone(),
+            second_vault_second_pos.clone()
         ]
     );
 
     // Query with start_after_vault_addr and start_after_id and limit
     let res = robot.zapper_query_user_unlocking_positions(
         &admin.address(),
-        Some(vault_1_addr.to_string()),
+        Some(first_vault.to_string()),
         Some(1),
         Some(1),
     );
     assert_eq!(res.len(), 1);
-    let positions_for_vault_two = res.get(&vault_2_addr).unwrap();
+    let positions_for_vault_two = res.get(&second_vault).unwrap();
     assert_eq!(positions_for_vault_two.len(), 1);
     assert_eq!(
         positions_for_vault_two,
-        &vec![vault_2_unlocking_pos_0.clone()]
+        &vec![second_vault_first_pos.clone()]
     );
 }

@@ -2,7 +2,7 @@ use apollo_utils::submessages::{find_event, parse_attribute_value};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
+    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Reply, Response, StdResult,
 };
 use cw2::set_contract_version;
 use cw_vault_standard::extensions::lockup::{
@@ -25,6 +25,9 @@ use crate::withdraw::{
     execute_zap_base_tokens,
 };
 
+#[cfg(feature = "astroport")]
+use crate::state::ASTROPORT_LIQUIDITY_MANAGER;
+
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault-zapper";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -40,6 +43,12 @@ pub fn instantiate(
 
     ROUTER.save(deps.storage, &msg.router.check(deps.api)?)?;
     LIQUIDITY_HELPER.save(deps.storage, &msg.liquidity_helper.check(deps.api)?)?;
+
+    #[cfg(feature = "astroport")]
+    ASTROPORT_LIQUIDITY_MANAGER.save(
+        deps.storage,
+        &deps.api.addr_validate(&msg.astroport_liquidity_manager)?,
+    )?;
 
     Ok(Response::default())
 }
@@ -192,11 +201,11 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::DepositableAssets { vault_address } => to_binary(&query_depositable_assets(
+        QueryMsg::DepositableAssets { vault_address } => to_json_binary(&query_depositable_assets(
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
-        QueryMsg::ReceiveChoices { vault_address } => to_binary(&query_receive_choices(
+        QueryMsg::ReceiveChoices { vault_address } => to_json_binary(&query_receive_choices(
             deps,
             deps.api.addr_validate(&vault_address)?,
         )?),
@@ -205,7 +214,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             owner,
             start_after_id,
             limit,
-        } => to_binary(&query_user_unlocking_positions_for_vault(
+        } => to_json_binary(&query_user_unlocking_positions_for_vault(
             deps,
             env,
             deps.api.addr_validate(&vault_address)?,
@@ -218,7 +227,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             start_after_vault_addr,
             start_after_id,
             limit,
-        } => to_binary(&query_all_user_unlocking_positions(
+        } => to_json_binary(&query_all_user_unlocking_positions(
             deps,
             env,
             deps.api.addr_validate(&owner)?,

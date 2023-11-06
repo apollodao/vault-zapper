@@ -8,6 +8,8 @@ use liquidity_helper::LiquidityHelper;
 pub const ROUTER: Item<CwDexRouter> = Item::new("router");
 pub const LIQUIDITY_HELPER: Item<LiquidityHelper> = Item::new("liquidity_helper");
 
+pub const ASTROPORT_LIQUIDITY_MANAGER: Item<Addr> = Item::new("astroport_liquidity_manager");
+
 /// Stores the lockup ids for unlocking positions. The key is a tuple of
 /// (owner_address, vault_address, lockup_id).
 pub const LOCKUP_IDS: Map<(Addr, Addr, u64), ()> = Map::new("lockup_ids");

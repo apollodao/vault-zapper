@@ -7,7 +7,7 @@ use cw_dex::Pool;
 use cw_storage_plus::Bound;
 
 use crate::msg::ReceiveChoice;
-use crate::state::{self, DEFAULT_LIMIT, LOCKUP_IDS, ROUTER};
+use crate::state::{self, ASTROPORT_LIQUIDITY_MANAGER, DEFAULT_LIMIT, LOCKUP_IDS, ROUTER};
 
 use cw_vault_standard::extensions::lockup::{LockupQueryMsg, UnlockingPosition};
 use cw_vault_standard::{ExtensionQueryMsg, VaultContract, VaultStandardQueryMsg};
@@ -22,8 +22,10 @@ pub fn query_depositable_assets(deps: Deps, vault_address: Addr) -> StdResult<Ve
         Err(_) => AssetInfo::native(&vault.base_token),
     };
 
-    // Check if deposit asset is an LP token
-    let pool = Pool::get_pool_for_lp_token(deps, &deposit_asset_info).ok();
+    // Check if deposit asset is an LP token3
+    let astroport_liquidity_manager = ASTROPORT_LIQUIDITY_MANAGER.may_load(deps.storage)?;
+    let pool =
+        Pool::get_pool_for_lp_token(deps, &deposit_asset_info, astroport_liquidity_manager).ok();
 
     // If deposit asset is an LP token, the target of the basket liquidation is
     // the first asset in the pool. Otherwise it is just the deposit asset.
@@ -70,7 +72,9 @@ pub fn query_receive_choices(deps: Deps, vault_address: Addr) -> StdResult<Vec<R
     };
 
     // Check if the withdrawn asset is an LP token
-    let pool = Pool::get_pool_for_lp_token(deps, &withdraw_asset_info).ok();
+    let astroport_liquidity_manager = ASTROPORT_LIQUIDITY_MANAGER.may_load(deps.storage)?;
+    let pool =
+        Pool::get_pool_for_lp_token(deps, &withdraw_asset_info, astroport_liquidity_manager).ok();
 
     let swap_to_choices: Vec<AssetInfo> = match pool {
         Some(pool) => {

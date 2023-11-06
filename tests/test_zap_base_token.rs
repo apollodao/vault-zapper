@@ -253,7 +253,7 @@ fn zap_base_tokens_to_both_assets_of_pool() {
     let base_tokens_received = base_token_balance_after_redeem - base_token_balance_before_redeem;
 
     let receive_choice = ReceiveChoice::Underlying;
-    let max_rel_diff = "0.000000001"; // One unit lost due to rounding
+    let max_rel_diff = "0.000000001"; // One or two units lost due to rounding
 
     robot
         .zap_base_tokens(
@@ -296,11 +296,11 @@ fn zap_base_tokens_to_both_assets_of_pool() {
             vec![
                 AssetUnchecked::new(
                     asset1.clone().into(),
-                    asset1_deposit_amount - Uint128::one(),
+                    asset1_deposit_amount - Uint128::one() - Uint128::one(),
                 ),
                 AssetUnchecked::new(
                     asset2.clone().into(),
-                    asset2_deposit_amount - Uint128::one(),
+                    asset2_deposit_amount - Uint128::one() - Uint128::one(),
                 ),
             ],
             Unwrap::Ok,

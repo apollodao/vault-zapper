@@ -313,7 +313,7 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
 
     // Redeem both assets
     let receive_choice = ReceiveChoice::Underlying;
-    let max_rel_diff = "0.000000001"; // One unit lost due to rounding
+    let max_rel_diff = "0.000000001"; // One or two units lost due to rounding
     if lock_duration == 0 {
         robot
             .zapper_redeem_all(
@@ -352,11 +352,11 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
                 vec![
                     AssetUnchecked::new(
                         asset1.clone().into(),
-                        asset1_deposit_amount - Uint128::one(),
+                        asset1_deposit_amount - Uint128::one() - Uint128::one(),
                     ),
                     AssetUnchecked::new(
                         asset2.clone().into(),
-                        asset2_deposit_amount - Uint128::one(),
+                        asset2_deposit_amount - Uint128::one() - Uint128::one(),
                     ),
                 ],
                 Unwrap::Ok,
@@ -415,11 +415,11 @@ fn redeem_both_assets_of_pool(lock_duration: u64) {
                 vec![
                     AssetUnchecked::new(
                         asset1.clone().into(),
-                        asset1_deposit_amount - Uint128::one(),
+                        asset1_deposit_amount - Uint128::one() - Uint128::one(),
                     ),
                     AssetUnchecked::new(
                         asset2.clone().into(),
-                        asset2_deposit_amount - Uint128::one(),
+                        asset2_deposit_amount - Uint128::one() - Uint128::one(),
                     ),
                 ],
                 Unwrap::Ok,
