@@ -3,4 +3,4 @@
 - cw_dex_router_astroport.wasm
     - Built locally with rust-optimizer-arm 0.13.0 from v0.2.0-rc.2.
 - locked_astroport_vault.wasm
-    - Built locally with rust-optimizer-arm 0.13.0 from v0.1.0-rc.2.
+    - Downloaded from [Github Releases v0.4.2](https://github.com/apollodao/locked-astroport-vault/releases/tag/v0.4.2)

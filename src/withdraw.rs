@@ -1,3 +1,4 @@
+use crate::msg::Pool;
 use apollo_cw_asset::{Asset, AssetInfo, AssetList};
 use apollo_utils::assets::receive_assets;
 use cosmwasm_schema::cw_serde;
@@ -5,8 +6,6 @@ use cosmwasm_std::{
     to_json_binary, Addr, CosmosMsg, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
     WasmMsg,
 };
-use cw_dex::traits::Pool as PoolTrait;
-use cw_dex::Pool;
 use cw_vault_standard::extensions::lockup::LockupExecuteMsg;
 use cw_vault_standard::msg::{ExtensionExecuteMsg, VaultStandardExecuteMsg as VaultExecuteMsg};
 use cw_vault_standard::VaultContract;

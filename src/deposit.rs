@@ -3,12 +3,10 @@ use apollo_utils::assets::receive_assets;
 use cosmwasm_std::{
     to_json_binary, Addr, Binary, Coin, DepsMut, Empty, Env, Event, MessageInfo, Response, Uint128,
 };
-use cw_dex::traits::Pool as PoolTrait;
-use cw_dex::Pool;
 use cw_vault_standard::VaultContract;
 
 use crate::helpers::VaultHelper;
-use crate::msg::CallbackMsg;
+use crate::msg::{CallbackMsg, Pool};
 use crate::state::{ASTROPORT_LIQUIDITY_MANAGER, LIQUIDITY_HELPER, ROUTER};
 use crate::ContractError;
 
@@ -165,6 +163,7 @@ pub fn callback_provide_liquidity(
         Pool::Astroport(pool) => to_json_binary(&pool)?,
         #[cfg(feature = "osmosis")]
         Pool::Osmosis(pool) => to_json_binary(&pool)?,
+        #[allow(unreachable_patterns)]
         _ => panic!("Unsupported pool type"),
     };
 

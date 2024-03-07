@@ -1,7 +1,6 @@
 use apollo_cw_asset::{Asset, AssetInfo, AssetList, AssetUnchecked};
 use common::setup;
 use cosmwasm_std::{Decimal, Uint128};
-use cw_dex::traits::Pool;
 use cw_it::astroport::robot::AstroportTestRobot;
 use cw_it::helpers::Unwrap;
 use cw_it::test_tube::Account;

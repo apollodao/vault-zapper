@@ -6,7 +6,6 @@ use common::{
     DEPENDENCY_ARTIFACTS_DIR, UNOPTIMIZED_PATH,
 };
 use cosmwasm_std::{coin, Addr, Coin, Decimal, Timestamp, Uint128};
-use cw_dex::pool::Pool;
 use cw_dex::traits::Pool as PoolTrait;
 use cw_it::helpers::Unwrap;
 use cw_it::robot::TestRobot;
@@ -17,9 +16,10 @@ use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use liquidity_helper::LiquidityHelperUnchecked;
 use locked_astroport_vault::msg::InstantiateMsg as AstroportVaultInstantiateMsg;
+use locked_astroport_vault::state::FeeConfig;
 use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
-use vault_zapper::msg::ReceiveChoice;
+use vault_zapper::msg::{Pool, ReceiveChoice};
 
 pub mod common;
 
@@ -174,6 +174,10 @@ fn query_unlocking_positions_for_two_vaults() {
     let vault_dependencies =
         LockedAstroportVaultRobot::instantiate_deps(&runner, &admin, DEPENDENCY_ARTIFACTS_DIR);
     let vault_treasury_addr = runner.init_account(&[]).unwrap().address();
+    let performance_fee = Some(FeeConfig {
+        fee_rate: Decimal::percent(5),
+        fee_recipients: vec![(vault_treasury_addr, Decimal::percent(100))],
+    });
 
     // Instantiate first vault
     let (axl_ntrn_vault, axl_ntrn_pool, astro_ntrn_pool) =
@@ -181,8 +185,9 @@ fn query_unlocking_positions_for_two_vaults() {
             &runner,
             LockedAstroportVaultRobot::contract(&runner, DEPENDENCY_ARTIFACTS_DIR),
             Coin::from_str(DENOM_CREATION_FEE).unwrap(),
-            vault_treasury_addr.clone(),
-            Decimal::percent(5),
+            performance_fee.clone(),
+            None,
+            None,
             vault_lock_duration,
             &vault_dependencies,
             &admin,
@@ -195,8 +200,7 @@ fn query_unlocking_positions_for_two_vaults() {
         lock_duration: vault_lock_duration,
         reward_tokens: vec![AssetInfo::native("uastro").into()],
         deposits_enabled: true,
-        treasury: vault_treasury_addr.clone(),
-        performance_fee: Decimal::percent(5),
+        performance_fee,
         router: vault_dependencies
             .cw_dex_router_robot
             .cw_dex_router
@@ -204,12 +208,6 @@ fn query_unlocking_positions_for_two_vaults() {
             .into(),
         reward_liquidation_target: AssetInfo::native("uastro").into(),
         pool_addr: astro_ntrn_pool.pair_addr.to_string(),
-        astro_token: apollo_cw_asset::AssetInfoUnchecked::native("uastro"),
-        astroport_generator: vault_dependencies
-            .astroport_contracts
-            .generator
-            .address
-            .clone(),
         liquidity_helper: LiquidityHelperUnchecked::new(
             vault_dependencies.liquidity_helper_addr.clone(),
         ),
@@ -218,6 +216,13 @@ fn query_unlocking_positions_for_two_vaults() {
             .liquidity_manager
             .address
             .clone(),
+        astroport_incentives_addr: vault_dependencies
+            .astroport_contracts
+            .incentives
+            .address
+            .clone(),
+        deposit_fee: None,
+        withdrawal_fee: None,
     };
     let astro_ntrn_vault_robot = LockedAstroportVaultRobot::new_with_instantiate_msg(
         &runner,
