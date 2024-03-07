@@ -7,7 +7,6 @@ use apollo_utils::assets::separate_natives_and_cw20s;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::testing::mock_dependencies;
 use cosmwasm_std::{assert_approx_eq, coin, Addr, Api, Coin, Coins, Decimal, Uint128};
-use cw_dex::Pool;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use cw_it::astroport::robot::AstroportTestRobot;
 use cw_it::astroport::utils::AstroportContracts;
@@ -20,9 +19,10 @@ use cw_it::{ContractType, TestRunner};
 use cw_vault_standard::extensions::lockup::UnlockingPosition;
 use cw_vault_standard_test_helpers::traits::CwVaultStandardRobot;
 use liquidity_helper::LiquidityHelperUnchecked;
+use locked_astroport_vault::state::FeeConfig;
 use locked_astroport_vault_test_helpers::robot::LockedAstroportVaultRobot;
 use locked_astroport_vault_test_helpers::router::CwDexRouterRobot;
-use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, ReceiveChoice};
+use vault_zapper::msg::{ExecuteMsg, InstantiateMsg, Pool, QueryMsg, ReceiveChoice};
 
 #[cfg(feature = "osmosis-test-tube")]
 use cw_it::Artifact;
@@ -143,13 +143,18 @@ impl<'a> VaultZapperRobot<'a> {
         let vault_dependencies =
             LockedAstroportVaultRobot::instantiate_deps(runner, signer, dependency_artifacts_dir);
         let vault_treasury_addr = runner.init_account(&[]).unwrap().address();
+        let performance_fee = Some(FeeConfig {
+            fee_rate: Decimal::percent(5),
+            fee_recipients: vec![(vault_treasury_addr, Decimal::percent(100))],
+        });
         let (reward_vault_robot, axl_ntrn_pool, _astro_ntrn_pool) =
             LockedAstroportVaultRobot::new_axlr_ntrn_vault(
                 runner,
                 LockedAstroportVaultRobot::contract(runner, dependency_artifacts_dir),
                 Coin::from_str(DENOM_CREATION_FEE).unwrap(),
-                vault_treasury_addr,
-                Decimal::percent(5),
+                performance_fee,
+                None,
+                None,
                 vault_lock_duration,
                 &vault_dependencies,
                 signer,
@@ -202,7 +207,7 @@ impl<'a> VaultZapperRobot<'a> {
                 code_id,
                 &instantiate_msg,
                 Some(&admin.address()),
-                None,
+                Some("Vault Zapper"),
                 &[],
                 admin,
             )

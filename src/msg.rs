@@ -1,9 +1,84 @@
+use std::ops::Deref;
+
 use apollo_cw_asset::{AssetInfo, AssetList, AssetListUnchecked, AssetUnchecked};
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
-use cw_dex::Pool;
+use cosmwasm_std::{to_json_binary, Addr, CosmosMsg, Deps, Env, StdResult, Uint128, WasmMsg};
+use cw_dex::traits::Pool as PoolTrait;
+use cw_dex::CwDexError;
 use cw_dex_router::helpers::CwDexRouterUnchecked;
 use liquidity_helper::LiquidityHelperUnchecked;
+
+#[cfg(feature = "astroport")]
+use cw_dex_astroport::AstroportPool;
+
+#[cfg(feature = "osmosis")]
+use cw_dex_osmosis::OsmosisPool;
+
+use crate::ContractError;
+
+/// An enum with all known variants that implement the cw-dex Pool trait.
+#[cw_serde]
+#[non_exhaustive]
+pub enum Pool {
+    /// Contains an Osmosis pool implementation
+    #[cfg(feature = "osmosis")]
+    Osmosis(OsmosisPool),
+    /// Contains an Astroport pool implementation
+    #[cfg(feature = "astroport")]
+    Astroport(AstroportPool),
+}
+
+impl Deref for Pool {
+    type Target = dyn PoolTrait;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            #[cfg(feature = "osmosis")]
+            Pool::Osmosis(pool) => pool as &dyn PoolTrait,
+            #[cfg(feature = "astroport")]
+            Pool::Astroport(pool) => pool as &dyn PoolTrait,
+        }
+    }
+}
+
+impl Pool {
+    /// Returns the matching pool given a LP token.
+    ///
+    /// Arguments:
+    /// - `lp_token`: Said LP token
+    /// - `astroport_liquidity_manager`: The Astroport liquidity manager
+    ///   address. This must be set if the LP token is an Astroport LP token.
+    #[allow(unused_assignments)]
+    #[allow(unused_mut)]
+    #[allow(unused_variables)]
+    pub fn get_pool_for_lp_token(
+        deps: Deps,
+        lp_token: &AssetInfo,
+        astroport_liquidity_manager: Option<Addr>,
+    ) -> Result<Self, ContractError> {
+        let mut res: Result<Self, ContractError> = Err(CwDexError::NotLpToken {}.into());
+
+        #[cfg(feature = "osmosis")]
+        {
+            res = OsmosisPool::get_pool_for_lp_token(deps, lp_token)
+                .map(Pool::Osmosis)
+                .map_err(|e| e.into());
+        }
+
+        #[cfg(feature = "astroport")]
+        {
+            res = AstroportPool::get_pool_for_lp_token(
+                deps,
+                lp_token,
+                astroport_liquidity_manager.unwrap(),
+            )
+            .map(Pool::Astroport)
+            .map_err(|e| e.into());
+        }
+
+        res
+    }
+}
 
 #[cw_serde]
 pub struct InstantiateMsg {

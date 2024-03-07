@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
+use crate::msg::Pool;
 use apollo_cw_asset::AssetInfo;
 use cosmwasm_std::{Addr, Deps, Empty, Env, Order, StdError, StdResult};
-use cw_dex::traits::Pool as PoolTrait;
-use cw_dex::Pool;
 use cw_storage_plus::Bound;
 
 use crate::msg::ReceiveChoice;
