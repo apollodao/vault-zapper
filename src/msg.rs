@@ -37,6 +37,8 @@ impl Deref for Pool {
             Pool::Osmosis(pool) => pool as &dyn PoolTrait,
             #[cfg(feature = "astroport")]
             Pool::Astroport(pool) => pool as &dyn PoolTrait,
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!("No pool implementation available"),
         }
     }
 }

@@ -16,10 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bump `locked-astroport-vault` and `locked-astroport-vault-test-helpers` to `0.4.2`.
 - Bump `cw-vault-standard-test-helpers` to `0.4.1`.
 
-### Added
-
-- Added check that either `astroport` or `osmosis` features, or both, are enabled.
-
 ## [0.2.0] - 2023-11-06
 
 ### Changed

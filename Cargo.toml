@@ -34,7 +34,6 @@ osmosis = ["cw-dex-osmosis"]
 astroport = ["cw-dex-astroport"]
 osmosis-test-tube = ["cw-it/osmosis-test-tube", "locked-astroport-vault-test-helpers/osmosis-test-tube"]
 
-
 [package.metadata.optimizer]
 builds = [
   { name = "astroport", features = ["astroport"] },

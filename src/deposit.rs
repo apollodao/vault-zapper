@@ -163,6 +163,8 @@ pub fn callback_provide_liquidity(
         Pool::Astroport(pool) => to_json_binary(&pool)?,
         #[cfg(feature = "osmosis")]
         Pool::Osmosis(pool) => to_json_binary(&pool)?,
+        #[allow(unreachable_patterns)]
+        _ => panic!("Unsupported pool type"),
     };
 
     let provide_liquidity_msgs = liquidity_helper.balancing_provide_liquidity(
